@@ -35,9 +35,9 @@
         <url-pattern>/import</url-pattern>
     </filter-mapping>
 
-    <!-- 欢迎页：访问根路径时跳转到首页 -->
+    <!-- 欢迎页：访问根路径时由 index.jsp 做重定向 -->
     <welcome-file-list>
-        <welcome-file>home</welcome-file>
+        <welcome-file>index.jsp</welcome-file>
     </welcome-file-list>
 
     <!-- 错误页配置 -->
