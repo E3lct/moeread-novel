@@ -1,0 +1,251 @@
+/* ===================================
+   书架页面样式
+   GitHub Web 风格 · 网格卡片 · 极简
+   =================================== */
+
+/* 工具栏：搜索 + 视图切换 */
+.bookshelf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* 搜索框 - GitHub 风格 */
+.bookshelf-search {
+    flex: 1;
+    max-width: 320px;
+    position: relative;
+}
+
+.bookshelf-search input {
+    width: 100%;
+    padding: 6px 12px 6px 32px;
+    border: 0.5px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    background: var(--color-bg-card);
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.bookshelf-search input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.bookshelf-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+}
+
+/* 筛选标签条 - GitHub 风格 */
+.bookshelf-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 0.5px solid var(--color-divider);
+}
+
+.filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background 0.1s;
+    white-space: nowrap;
+}
+
+.filter-tab:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--color-text);
+}
+
+.filter-tab.active {
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    font-weight: var(--font-medium);
+}
+
+.filter-count {
+    font-size: var(--font-size-xs);
+    padding: 1px 6px;
+    border-radius: var(--radius-pill);
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-text-tertiary);
+}
+
+.filter-tab.active .filter-count {
+    background: rgba(217, 119, 6, 0.15);
+    color: var(--color-primary-darker);
+}
+
+/* 书籍网格 */
+.book-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+}
+
+/* 书籍卡片 */
+.book-card {
+    background: var(--color-bg-card);
+    border: 0.5px solid var(--color-border-neutral);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.book-card:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 书籍封面 */
+.book-cover {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 封面渐变背景（6种交替） */
+.book-cover.cover-1 { background: var(--cover-1); }
+.book-cover.cover-2 { background: var(--cover-2); }
+.book-cover.cover-3 { background: var(--cover-3); }
+.book-cover.cover-4 { background: var(--cover-4); }
+.book-cover.cover-5 { background: var(--cover-5); }
+.book-cover.cover-6 { background: var(--cover-6); }
+
+/* 喜欢标记（右上角爱心） */
+.book-favorite {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+}
+
+.book-favorite svg {
+    width: 14px;
+    height: 14px;
+    fill: var(--color-primary-dark);
+}
+
+/* 书籍信息 */
+.book-info {
+    padding: 12px 14px;
+}
+
+.book-title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-medium);
+    color: var(--color-text);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.book-meta {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.book-meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--color-text-light);
+}
+
+/* 状态徽章 */
+.book-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-medium);
+    margin-top: 8px;
+}
+
+.badge-reading {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.badge-prepare {
+    background: #F1EFE8;
+    color: #5F5E5A;
+}
+
+.badge-finished {
+    background: #ECFDF5;
+    color: #047857;
+}
+
+/* 空状态 - GitHub 风格 */
+.empty-state {
+    text-align: center;
+    padding: 80px 24px;
+}
+
+.empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    background: var(--color-primary-pale);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary-darker);
+    font-size: 28px;
+    font-weight: 300;
+}
+
+.empty-state-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-medium);
+    color: var(--color-text);
+    margin-bottom: 8px;
+}
+
+.empty-state-desc {
+    font-size: var(--font-size-base);
+    color: var(--color-text-tertiary);
+    margin-bottom: 20px;
+}

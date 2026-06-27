@@ -9,12 +9,14 @@
     }
 %>
 
-<%-- 顶部 Mac 风格导航栏 --%>
+<%-- 顶部悬浮胶囊导航栏 (Mac 风格) --%>
 <div class="navbar">
     <div class="navbar-logo">
         <div class="navbar-logo-circle">墨</div>
         <span class="navbar-logo-text">墨读</span>
     </div>
+
+    <div class="navbar-divider"></div>
 
     <div class="navbar-nav">
         <a class="navbar-item <%= "/home".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/home">首页</a>
@@ -24,6 +26,8 @@
         <a class="navbar-item <%= "/stats".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/stats">统计</a>
         <a class="navbar-item <%= "/settings".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/settings">设置</a>
     </div>
+
+    <div class="navbar-divider"></div>
 
     <div class="navbar-user" onclick="window.location.href='${pageContext.request.contextPath}/settings'">
         <div class="navbar-avatar">

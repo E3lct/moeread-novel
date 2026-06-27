@@ -1,50 +1,66 @@
 /* ===================================
-   主布局：Mac 风格顶部导航 + 内容区
+   主布局：Mac 风格悬浮导航 + 内容区
+   导航栏：居中悬浮胶囊，不贴边，毛玻璃
    =================================== */
 
-/* 顶部导航栏 - 固定悬浮，毛玻璃 */
+/* 顶部悬浮容器 - 不贴边，居中悬浮 */
 .navbar {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: var(--nav-height);
-    background: var(--nav-bg);
-    backdrop-filter: var(--nav-blur);
-    -webkit-backdrop-filter: var(--nav-blur);
-    border-bottom: 0.5px solid var(--nav-border);
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    min-width: 560px;
+    max-width: calc(100% - 32px);
+    height: 44px;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 0.5px solid rgba(253, 230, 138, 0.4);
+    border-radius: 22px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
     z-index: 1000;
     display: flex;
     align-items: center;
-    padding: 0 var(--spacing-3xl);
+    padding: 0 12px;
+    gap: 8px;
 }
 
 /* Logo 区 */
 .navbar-logo {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
+    padding: 0 6px;
 }
 
 .navbar-logo-circle {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--color-primary-pale);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--color-primary-darker);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .navbar-logo-text {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-md);
     font-weight: 600;
     color: var(--color-text);
     letter-spacing: 0.5px;
+}
+
+/* 分隔点 */
+.navbar-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
 }
 
 /* 中间导航标签组 */
@@ -53,13 +69,13 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
 }
 
 .navbar-item {
-    padding: 6px 14px;
+    padding: 5px 12px;
     border-radius: var(--radius-pill);
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -69,7 +85,7 @@
 
 .navbar-item:hover {
     color: var(--color-text);
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .navbar-item.active {
@@ -82,41 +98,45 @@
 .navbar-user {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
     cursor: pointer;
-    padding: 4px 10px 4px 4px;
+    padding: 3px 10px 3px 4px;
     border-radius: var(--radius-pill);
     transition: background 0.15s;
 }
 
 .navbar-user:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .navbar-avatar {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--color-primary-pale);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--color-primary-darker);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
 }
 
 .navbar-username {
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* 主内容区 */
+/* 主内容区 - 顶部留白给悬浮导航栏 */
 .main-content {
-    margin-top: var(--nav-height);
-    min-height: calc(100vh - var(--nav-height));
-    padding: var(--spacing-3xl) var(--content-padding);
+    margin-top: 68px;
+    min-height: calc(100vh - 68px);
+    padding: var(--spacing-2xl) var(--content-padding);
     max-width: var(--content-max-width);
     margin-left: auto;
     margin-right: auto;
