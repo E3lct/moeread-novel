@@ -50,6 +50,28 @@
         <location>/WEB-INF/jsp/error/500.jsp</location>
     </error-page>
 
+    <!-- MIME 类型映射：确保静态资源返回正确的 Content-Type -->
+    <mime-mapping>
+        <extension>css</extension>
+        <mime-type>text/css;charset=UTF-8</mime-type>
+    </mime-mapping>
+    <mime-mapping>
+        <extension>js</extension>
+        <mime-type>application/javascript;charset=UTF-8</mime-type>
+    </mime-mapping>
+    <mime-mapping>
+        <extension>svg</extension>
+        <mime-type>image/svg+xml</mime-type>
+    </mime-mapping>
+    <mime-mapping>
+        <extension>png</extension>
+        <mime-type>image/png</mime-type>
+    </mime-mapping>
+    <mime-mapping>
+        <extension>jpg</extension>
+        <mime-type>image/jpeg</mime-type>
+    </mime-mapping>
+
     <!-- Session 超时：30 分钟 -->
     <session-config>
         <session-timeout>30</session-timeout>
