@@ -1,51 +1,23 @@
 /* ===================================
    导入页面样式
+   Mac 风格 · 白卡片 · 琥珀点缀
    =================================== */
-
-.import-wrapper {
-    min-height: 100vh;
-    background: linear-gradient(160deg, #FFFBEB 0%, #FAF8F3 40%, #FEF3C7 100%);
-    padding: 24px 20px 100px;
-    max-width: 720px;
-    margin: 0 auto;
-}
-
-.import-header {
-    text-align: center;
-    margin-bottom: 32px;
-    padding-top: 20px;
-}
-
-.import-header h1 {
-    font-size: 28px;
-    color: var(--color-primary-darker);
-    margin: 0 0 8px;
-    font-weight: 700;
-}
-
-.import-header p {
-    color: var(--color-text-secondary);
-    font-size: 14px;
-    margin: 0;
-}
 
 /* 上传区域 */
 .upload-zone {
-    background: #fff;
-    border: 2px dashed var(--color-border);
-    border-radius: 16px;
-    padding: 48px 24px;
+    background: var(--color-bg-card);
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 56px 24px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.25s ease;
-    margin-bottom: 24px;
+    transition: all 0.2s ease;
+    margin-bottom: var(--spacing-2xl);
 }
 
 .upload-zone:hover {
     border-color: var(--color-primary);
     background: var(--color-primary-palest);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(217, 119, 6, 0.12);
 }
 
 .upload-zone.dragover {
@@ -54,39 +26,38 @@
 }
 
 .upload-icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 16px;
-    background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--spacing-lg);
+    background: var(--color-primary-pale);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--color-primary-darker);
     font-size: 28px;
-    font-weight: 700;
+    font-weight: 300;
 }
 
 .upload-text {
-    font-size: 16px;
-    color: var(--color-text-primary);
+    font-size: var(--font-size-md);
+    color: var(--color-text);
     margin-bottom: 6px;
-    font-weight: 600;
+    font-weight: var(--font-medium);
 }
 
 .upload-hint {
-    font-size: 13px;
-    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
 }
 
 .upload-formats {
-    margin-top: 8px;
-    font-size: 12px;
+    margin-top: var(--spacing-sm);
+    font-size: var(--font-size-xs);
     color: var(--color-primary-dark);
-    font-weight: 500;
+    font-weight: var(--font-medium);
 }
 
-/* 隐藏的文件输入 */
 .upload-input {
     display: none;
 }
@@ -94,140 +65,58 @@
 /* 导入按钮 */
 .import-actions {
     text-align: center;
-    margin-top: 20px;
-}
-
-.import-btn {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-    color: #fff;
-    border: none;
-    padding: 12px 40px;
-    border-radius: 24px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
-}
-
-.import-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(217, 119, 6, 0.35);
-}
-
-.import-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
+    margin-top: var(--spacing-xl);
 }
 
 /* 文件列表 */
 .file-list {
-    margin-top: 16px;
+    margin-top: var(--spacing-lg);
 }
 
 .file-item {
-    background: #fff;
-    border-radius: 10px;
+    background: var(--color-bg-card);
+    border: 0.5px solid var(--color-border);
+    border-radius: var(--radius-md);
     padding: 12px 16px;
-    margin-bottom: 8px;
+    margin-bottom: var(--spacing-sm);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.06);
 }
 
 .file-name {
-    font-size: 14px;
-    color: var(--color-text-primary);
-    font-weight: 500;
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    font-weight: var(--font-medium);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-right: 12px;
+    margin-right: var(--spacing-md);
 }
 
 .file-size {
-    font-size: 12px;
-    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
     white-space: nowrap;
 }
 
-.file-remove {
-    color: var(--color-text-muted);
-    cursor: pointer;
-    font-size: 18px;
-    margin-left: 12px;
-    transition: color 0.2s;
-}
-
-.file-remove:hover {
-    color: #ef4444;
-}
-
-/* 提示信息 */
-.import-message {
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.import-message.success {
-    background: #ECFDF5;
-    color: #047857;
-    border: 1px solid #A7F3D0;
-}
-
-.import-message.error {
-    background: #FEF2F2;
-    color: #B91C1C;
-    border: 1px solid #FECACA;
-}
-
 /* 说明卡片 */
-.info-card {
-    background: #fff;
-    border-radius: 14px;
-    padding: 20px 24px;
-    box-shadow: 0 2px 12px rgba(217, 119, 6, 0.08);
-    margin-bottom: 20px;
-}
-
 .info-card h3 {
-    font-size: 15px;
-    color: var(--color-primary-darker);
-    margin: 0 0 12px;
-    font-weight: 600;
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    margin-bottom: var(--spacing-md);
+    font-weight: var(--font-medium);
 }
 
 .info-card ul {
     margin: 0;
     padding-left: 18px;
     color: var(--color-text-secondary);
-    font-size: 13px;
-    line-height: 1.8;
+    font-size: var(--font-size-sm);
+    line-height: 1.9;
 }
 
 .info-card li {
-    margin-bottom: 4px;
-}
-
-/* 返回链接 */
-.import-back {
-    text-align: center;
-    margin-top: 24px;
-}
-
-.import-back a {
-    color: var(--color-primary-dark);
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.import-back a:hover {
-    text-decoration: underline;
+    margin-bottom: 2px;
 }

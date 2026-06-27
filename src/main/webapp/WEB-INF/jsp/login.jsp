@@ -12,13 +12,13 @@
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-logo">
+                <div class="auth-logo-circle">墨</div>
                 <h1>墨读</h1>
-                <p>Moeread - 你的私人阅读空间</p>
+                <p>你的私人阅读空间</p>
             </div>
 
-            <%-- 错误提示 --%>
             <% if (request.getAttribute("error") != null) { %>
-                <div class="auth-error">${error}</div>
+                <div class="message message-error" style="margin-bottom: 20px;">${error}</div>
             <% } %>
 
             <form class="auth-form" action="${pageContext.request.contextPath}/login" method="post">
@@ -40,10 +40,6 @@
 
             <div class="auth-footer">
                 还没有账号？ <a href="${pageContext.request.contextPath}/register">注册新账号</a>
-            </div>
-
-            <div class="auth-back">
-                <a href="${pageContext.request.contextPath}/index.jsp">返回首页</a>
             </div>
         </div>
     </div>

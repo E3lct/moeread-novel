@@ -12,13 +12,13 @@
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-logo">
-                <h1>墨读</h1>
-                <p>创建你的阅读账号</p>
+                <div class="auth-logo-circle">墨</div>
+                <h1>创建账号</h1>
+                <p>开始你的阅读之旅</p>
             </div>
 
-            <%-- 错误提示 --%>
             <% if (request.getAttribute("error") != null) { %>
-                <div class="auth-error">${error}</div>
+                <div class="message message-error" style="margin-bottom: 20px;">${error}</div>
             <% } %>
 
             <form class="auth-form" action="${pageContext.request.contextPath}/register" method="post">
@@ -30,7 +30,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="nickname">昵称（选填）</label>
+                    <label for="nickname">昵称（可选）</label>
                     <input type="text" id="nickname" name="nickname"
                            value="${requestScope.nickname}"
                            placeholder="留空则用用户名" autocomplete="off">

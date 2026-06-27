@@ -1,49 +1,52 @@
 /* ===================================
    墨读 Moeread 全局样式变量
-   所有颜色用变量统一管理，换色只改这里
+   Mac 风格 · 琥珀点缀 · 电脑端优先
    =================================== */
 
 :root {
-    /* 主色 - 琥珀黄系 */
+    /* 主色 - 琥珀黄系（仅作点缀） */
     --color-primary: #F59E0B;
     --color-primary-light: #FBBF24;
     --color-primary-lighter: #FCD34D;
     --color-primary-lightest: #FEF3C7;
     --color-primary-palest: #FFFBEB;
+    --color-primary-pale: #FAEEDA;
     --color-primary-dark: #D97706;
     --color-primary-darker: #B45309;
     --color-primary-darkest: #92400E;
 
-    /* 背景 */
+    /* 背景 - 大面积留白 */
     --color-bg: #FAF8F3;
     --color-bg-card: #FFFFFF;
-    --color-bg-hover: #FFFBEB;
+    --color-bg-hover: #FAFAFA;
+    --color-bg-page: #F5F5F5;
 
-    /* 文字 */
+    /* 文字 - 深棕为主，灰色为辅 */
     --color-text: #3D2E1A;
-    --color-text-secondary: #78350F;
-    --color-text-tertiary: #92400E;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
     --color-text-hint: #A16207;
-    --color-text-light: #D1D5DB;
+    --color-text-light: #B4B2A9;
+    --color-text-on-primary: #FFFFFF;
 
-    /* 边框/分割线 */
+    /* 边框/分割线 - 极淡 */
     --color-border: #FDE68A;
     --color-border-light: #FEF3C7;
-    --color-divider: #FEF3C7;
+    --color-border-neutral: #E8E6E1;
+    --color-divider: #F0EEE8;
 
-    /* 阴影 - 琥珀系柔和阴影 */
-    --shadow-sm: 0 2px 8px rgba(217, 119, 6, 0.06);
-    --shadow-md: 0 2px 10px rgba(217, 119, 6, 0.06);
-    --shadow-lg: 0 4px 14px rgba(217, 119, 6, 0.15);
-    --shadow-xl: 0 4px 20px rgba(217, 119, 6, 0.15);
+    /* 阴影 - 极淡 */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --shadow-nav: 0 1px 0 rgba(0, 0, 0, 0.04);
 
     /* 圆角 */
-    --radius-sm: 8px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
     --radius-xl: 16px;
-    --radius-pill: 24px;
-    --radius-full: 50%;
+    --radius-pill: 999px;
 
     /* 间距 */
     --spacing-xs: 4px;
@@ -53,21 +56,33 @@
     --spacing-xl: 20px;
     --spacing-2xl: 24px;
     --spacing-3xl: 32px;
+    --spacing-4xl: 48px;
 
-    /* 字号 */
-    --font-size-xs: 10px;
-    --font-size-sm: 11px;
-    --font-size-base: 12px;
-    --font-size-md: 13px;
-    --font-size-lg: 14px;
-    --font-size-xl: 15px;
+    /* 字号 - 电脑端标准 */
+    --font-size-xs: 11px;
+    --font-size-sm: 12px;
+    --font-size-base: 13px;
+    --font-size-md: 14px;
+    --font-size-lg: 15px;
+    --font-size-xl: 16px;
     --font-size-2xl: 18px;
-    --font-size-3xl: 21px;
-    --font-size-4xl: 26px;
+    --font-size-3xl: 22px;
+    --font-size-4xl: 28px;
 
     /* 字重 */
     --font-normal: 400;
     --font-medium: 500;
+    --font-semibold: 600;
+
+    /* 顶部导航栏 */
+    --nav-height: 48px;
+    --nav-blur: blur(20px);
+    --nav-bg: rgba(255, 255, 255, 0.7);
+    --nav-border: rgba(253, 230, 138, 0.5);
+
+    /* 内容区最大宽度 */
+    --content-max-width: 1200px;
+    --content-padding: 32px;
 
     /* 书籍封面渐变 - 6 种方向交替 */
     --cover-1: linear-gradient(145deg, #F59E0B, #D97706);
@@ -76,14 +91,6 @@
     --cover-4: linear-gradient(140deg, #D97706, #B45309);
     --cover-5: linear-gradient(160deg, #F59E0B, #D97706);
     --cover-6: linear-gradient(150deg, #92400E, #78350F);
-
-    /* 导航栏 */
-    --nav-height: 56px;
-    --nav-shadow: 0 4px 20px rgba(217, 119, 6, 0.15);
-
-    /* 看板娘 */
-    --mascot-width: 54px;
-    --mascot-height: 70px;
 }
 
 /* ===================================
@@ -96,29 +103,36 @@
     box-sizing: border-box;
 }
 
+html, body {
+    height: 100%;
+}
+
 body {
-    font-family: -apple-system, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+                 "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-md);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* 链接 */
 a {
     color: var(--color-primary-dark);
     text-decoration: none;
+    transition: color 0.15s;
 }
 
 a:hover {
     color: var(--color-primary-darker);
 }
 
-/* 滚动条美化 */
+/* 滚动条 - Mac 风格极简 */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -126,12 +140,12 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--color-border);
-    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-primary-lighter);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 /* 文字溢出省略 */
@@ -144,6 +158,13 @@ a:hover {
 .text-ellipsis-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.text-ellipsis-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
