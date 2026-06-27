@@ -32,5 +32,17 @@ logs/
 *.db
 *.sqlite
 
+# 敏感配置（数据库密码等）
+src/main/resources/config.properties
+
 # Uploads (user imported txt files)
 uploads/
+
+# 看板娘图片（用户上传）
+src/main/webapp/assets/mascot/
+
+# 环境配置指南（含个人密码，不上传）
+环境配置指南.md
+
+# workbuddy 项目记忆（不上传）
+.workbuddy/

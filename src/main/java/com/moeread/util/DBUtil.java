@@ -1,30 +1,48 @@
 package com.moeread.util;
 
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Properties;
 
 /**
  * 数据库连接工具类
  * 负责获取连接、释放资源
  * 学生写法：每个方法独立处理异常，不做连接池（作业版够用）
+ *
+ * 配置从 config.properties 读取（该文件不上传 GitHub，保护密码）
  */
 public class DBUtil {
 
-    // 数据库连接信息
-    private static final String URL = "jdbc:mysql://localhost:3306/moeread?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8mb4";
-    private static final String USERNAME = "root";
-    private static final String PASSWORD = "123456";
+    private static String URL;
+    private static String USERNAME;
+    private static String PASSWORD;
 
-    // 加载驱动（类加载时执行一次）
+    // 加载驱动和配置（类加载时执行一次）
     static {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
+            // 从 classpath 读取配置文件
+            Properties props = new Properties();
+            InputStream is = DBUtil.class.getClassLoader().getResourceAsStream("config.properties");
+            if (is != null) {
+                props.load(is);
+                URL = props.getProperty("db.url");
+                USERNAME = props.getProperty("db.username");
+                PASSWORD = props.getProperty("db.password");
+                is.close();
+            } else {
+                // 配置文件不存在时用默认值（方便测试）
+                URL = "jdbc:mysql://localhost:3306/moeread?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8mb4";
+                USERNAME = "root";
+                PASSWORD = "123456";
+            }
+        } catch (Exception e) {
             e.printStackTrace();
-            throw new RuntimeException("MySQL 驱动加载失败", e);
+            throw new RuntimeException("数据库配置加载失败", e);
         }
     }
 
