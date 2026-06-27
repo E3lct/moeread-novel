@@ -36,7 +36,7 @@ public class DBUtil {
                 is.close();
             } else {
                 // 配置文件不存在时用默认值（方便测试）
-                URL = "jdbc:mysql://localhost:3306/moeread?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
+                URL = "jdbc:mysql://localhost:3306/moeread?useSSL=false&useUnicode=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
                 USERNAME = "root";
                 PASSWORD = "123456";
             }

@@ -22,19 +22,13 @@ public class UserService {
     public User login(String username, String password) {
         User user = userDAO.findByUsername(username);
         if (user == null) {
-            System.out.println("[DEBUG login] 用户不存在: " + username);
-            return null; // 用户不存在
+            return null;
         }
-        // 比对 MD5
         String md5Password = MD5Util.md5(password);
-        System.out.println("[DEBUG login] username=" + username);
-        System.out.println("[DEBUG login] 输入密码MD5=" + md5Password);
-        System.out.println("[DEBUG login] 数据库密码  =" + user.getPassword());
-        System.out.println("[DEBUG login] 是否相等=" + user.getPassword().equals(md5Password));
         if (user.getPassword() != null && user.getPassword().equals(md5Password)) {
-            return user; // 密码正确
+            return user;
         }
-        return null; // 密码错误
+        return null;
     }
 
     /**
