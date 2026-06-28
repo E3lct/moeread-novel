@@ -111,8 +111,13 @@ public class ReaderServlet extends HttpServlet {
             if (b != null && b.getUserId() == user.getId() && chapterIndex > 0) {
                 ok = progressDAO.upsert(user.getId(), bookId, chapterIndex, scrollPercent);
                 if (ok) {
-                    // 每次保存进度累加 1 分钟阅读时长
-                    statsDAO.addTodayMinutes(user.getId(), 1);
+                    // 每分钟最多累加 1 分钟阅读时长（防止频繁保存导致时长暴涨）
+                    Long lastStatsUpdate = (Long) session.getAttribute("lastStatsUpdate");
+                    long now = System.currentTimeMillis();
+                    if (lastStatsUpdate == null || now - lastStatsUpdate > 60000) {
+                        statsDAO.addTodayMinutes(user.getId(), 1);
+                        session.setAttribute("lastStatsUpdate", now);
+                    }
                 }
             }
         }
