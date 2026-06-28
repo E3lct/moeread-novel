@@ -268,8 +268,9 @@
                     <label class="crop-zoom-label">
                         <span>缩放</span>
                         <input type="range" id="cropZoom" min="100" max="300" value="100" step="5">
+                        <span class="crop-zoom-val" id="cropZoomVal">100%</span>
                     </label>
-                    <span class="crop-hint">拖动图片调整位置</span>
+                    <span class="crop-hint">拖动图片选择区域 · 滚轮或滑块缩放 · 框内即剪裁结果</span>
                 </div>
             </div>
             <div class="modal-footer">
@@ -412,6 +413,7 @@
             var cropDragging = false;
             var cropDragStartX = 0, cropDragStartY = 0;
             var cropStartOffsetX = 0, cropStartOffsetY = 0;
+            var cropBaseScale = 1;  // 图片 cover frame 时的基准缩放（原图很大时 < 1）
 
             // 打开编辑弹窗时加载当前封面
             var origOpenModal = openModal;
@@ -453,10 +455,20 @@
                     cropImage.onload = function() {
                         cropImgNaturalW = cropImage.naturalWidth;
                         cropImgNaturalH = cropImage.naturalHeight;
-                        // 初始化裁剪状态
+                        // 计算 cover 基准 scale：让图片刚好覆盖整个剪裁框
+                        var frameW = cropFrame.clientWidth;
+                        var frameH = cropFrame.clientHeight;
+                        cropBaseScale = Math.max(frameW / cropImgNaturalW, frameH / cropImgNaturalH);
+                        // 滑块范围：100% = 刚好 cover，300% = 放大 3 倍
+                        cropZoom.min = 100;
+                        cropZoom.max = 300;
+                        cropZoom.step = 5;
                         cropZoom.value = 100;
-                        cropOffsetX = 0;
-                        cropOffsetY = 0;
+                        // 居中显示
+                        var dispW = cropImgNaturalW * cropBaseScale;
+                        var dispH = cropImgNaturalH * cropBaseScale;
+                        cropOffsetX = (frameW - dispW) / 2;
+                        cropOffsetY = (frameH - dispH) / 2;
                         updateCropImage();
                         cropModal.classList.add('open');
                     };
@@ -465,36 +477,44 @@
                 this.value = '';
             });
 
+            // 实际显示 scale = baseScale * (zoom / 100)
+            function getActualScale() {
+                return cropBaseScale * (parseInt(cropZoom.value, 10) / 100);
+            }
+
             function updateCropImage() {
-                var scale = parseInt(cropZoom.value, 10) / 100;
+                var scale = getActualScale();
                 var dispW = cropImgNaturalW * scale;
                 var dispH = cropImgNaturalH * scale;
                 cropImage.style.width = dispW + 'px';
                 cropImage.style.height = dispH + 'px';
-                // 居中
                 var frameW = cropFrame.clientWidth;
                 var frameH = cropFrame.clientHeight;
+                // 图片必须覆盖 frame（不允许出现空白），所以 offset 限制在 [frame-dim, 0]
                 cropOffsetX = Math.max(Math.min(cropOffsetX, 0), frameW - dispW);
                 cropOffsetY = Math.max(Math.min(cropOffsetY, 0), frameH - dispH);
-                if (dispW < frameW) cropOffsetX = (frameW - dispW) / 2;
-                if (dispH < frameH) cropOffsetY = (frameH - dispH) / 2;
                 cropImage.style.left = cropOffsetX + 'px';
                 cropImage.style.top = cropOffsetY + 'px';
             }
 
+            // 缩放滑块：以剪裁框中心为锚点
             cropZoom.addEventListener('input', function() {
                 var frameW = cropFrame.clientWidth;
                 var frameH = cropFrame.clientHeight;
-                var oldScale = cropImage.offsetWidth / cropImgNaturalW;
-                var newScale = parseInt(cropZoom.value, 10) / 100;
-                // 以中心为锚点缩放
-                var centerX = frameW / 2 - cropOffsetX;
-                var centerY = frameH / 2 - cropOffsetY;
-                var ratio = newScale / oldScale;
-                var newCenterX = centerX * ratio;
-                var newCenterY = centerY * ratio;
-                cropOffsetX = frameW / 2 - newCenterX;
-                cropOffsetY = frameH / 2 - newCenterY;
+                var oldScale = cropBaseScale * (parseInt(this.dataset.lastZoom || '100', 10) / 100);
+                var newScale = getActualScale();
+                // 中心点在图片上的相对位置（0-1）
+                var centerXRatio = (frameW / 2 - cropOffsetX) / (cropImgNaturalW * oldScale);
+                var centerYRatio = (frameH / 2 - cropOffsetY) / (cropImgNaturalH * oldScale);
+                // 缩放后保持中心点位置
+                var newDispW = cropImgNaturalW * newScale;
+                var newDispH = cropImgNaturalH * newScale;
+                cropOffsetX = frameW / 2 - centerXRatio * newDispW;
+                cropOffsetY = frameH / 2 - centerYRatio * newDispH;
+                this.dataset.lastZoom = this.value;
+                // 更新百分比显示
+                var valEl = document.getElementById('cropZoomVal');
+                if (valEl) valEl.textContent = this.value + '%';
                 updateCropImage();
             });
 
@@ -517,14 +537,23 @@
                 var frameH = cropFrame.clientHeight;
                 var imgW = cropImage.offsetWidth;
                 var imgH = cropImage.offsetHeight;
+                // 图片必须覆盖 frame，不允许出现空白边
                 cropOffsetX = Math.max(Math.min(cropOffsetX, 0), frameW - imgW);
                 cropOffsetY = Math.max(Math.min(cropOffsetY, 0), frameH - imgH);
-                if (imgW < frameW) cropOffsetX = (frameW - imgW) / 2;
-                if (imgH < frameH) cropOffsetY = (frameH - imgH) / 2;
                 cropImage.style.left = cropOffsetX + 'px';
                 cropImage.style.top = cropOffsetY + 'px';
             });
             document.addEventListener('mouseup', function() { cropDragging = false; });
+
+            // 滚轮缩放（更符合直觉）
+            cropFrame.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                var delta = e.deltaY < 0 ? 10 : -10;
+                var newVal = Math.max(100, Math.min(300, parseInt(cropZoom.value, 10) + delta));
+                if (newVal === parseInt(cropZoom.value, 10)) return;
+                cropZoom.value = newVal;
+                cropZoom.dispatchEvent(new Event('input'));
+            }, { passive: false });
 
             // 触屏拖动
             cropFrame.addEventListener('touchstart', function(e) {
@@ -547,8 +576,6 @@
                 var imgH = cropImage.offsetHeight;
                 cropOffsetX = Math.max(Math.min(cropOffsetX, 0), frameW - imgW);
                 cropOffsetY = Math.max(Math.min(cropOffsetY, 0), frameH - imgH);
-                if (imgW < frameW) cropOffsetX = (frameW - imgW) / 2;
-                if (imgH < frameH) cropOffsetY = (frameH - imgH) / 2;
                 cropImage.style.left = cropOffsetX + 'px';
                 cropImage.style.top = cropOffsetY + 'px';
                 e.preventDefault();
@@ -560,12 +587,17 @@
                 if (!pendingCoverFile || !currentBookId) { alert('请先选择图片'); return; }
                 var frameW = cropFrame.clientWidth;
                 var frameH = cropFrame.clientHeight;
-                var scale = parseInt(cropZoom.value, 10) / 100;
+                var scale = getActualScale();
                 // 计算裁剪区域在原图上的坐标
                 var srcX = (-cropOffsetX) / scale;
                 var srcY = (-cropOffsetY) / scale;
                 var srcW = frameW / scale;
                 var srcH = frameH / scale;
+                // 边界保护
+                if (srcX < 0) srcX = 0;
+                if (srcY < 0) srcY = 0;
+                if (srcX + srcW > cropImgNaturalW) srcW = cropImgNaturalW - srcX;
+                if (srcY + srcH > cropImgNaturalH) srcH = cropImgNaturalH - srcY;
                 // 输出 360x480 (3:4)
                 var canvas = document.createElement('canvas');
                 canvas.width = 360;

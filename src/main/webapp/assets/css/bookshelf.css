@@ -886,16 +886,39 @@
 }
 
 .crop-frame {
-    width: 180px;
-    height: 240px;
+    width: 240px;
+    height: 320px;
     position: relative;
     overflow: hidden;
     border-radius: 4px;
     background: #1a1a1a;
     cursor: grab;
     user-select: none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15);
 }
 .crop-frame:active { cursor: grabbing; }
+
+/* 剪裁框四角装饰，让用户知道"框内即剪裁结果" */
+.crop-frame::before,
+.crop-frame::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    pointer-events: none;
+    z-index: 5;
+}
+.crop-frame::before {
+    top: 0; left: 0;
+    border-right: none;
+    border-bottom: none;
+}
+.crop-frame::after {
+    bottom: 0; right: 0;
+    border-left: none;
+    border-top: none;
+}
 
 .crop-frame img {
     position: absolute;
@@ -932,6 +955,12 @@
 .crop-zoom-label input[type="range"] {
     flex: 1;
     accent-color: var(--color-primary);
+}
+.crop-zoom-val {
+    min-width: 40px;
+    text-align: right;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
 }
 
 .crop-hint {
