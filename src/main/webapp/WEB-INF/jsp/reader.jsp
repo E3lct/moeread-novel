@@ -60,7 +60,8 @@
                 <ul class="toc-list">
                     <% for (Chapter c : toc) { %>
                         <li class="toc-item <%=c.getChapterIndex() == chapterIndex ? "active" : ""%>"
-                            onclick="window.location.href='<%=ctx%>/reader?bookId=<%=book.getId()%>&chapter=<%=c.getChapterIndex()%>'">
+                            data-chapter="<%=c.getChapterIndex()%>"
+                            onclick="goToChapter(<%=c.getChapterIndex()%>)">
                             <%=c.getChapterIndex()%>. <%=c.getTitle() == null ? "无标题" : c.getTitle()%>
                         </li>
                     <% } %>
@@ -228,13 +229,20 @@
         applyAll();
     });
 
-    // ---- 翻页 ----
+    // ---- 翻页 / 章节跳转 ----
     function goChapter(idx) {
         if (idx < 1) return;
         saveProgress(idx, 0, function() {
             window.location.href = ctx + '/reader?bookId=' + bookId + '&chapter=' + idx;
         });
     }
+    // TOC 章节跳转（先保存当前进度）
+    function goToChapter(idx) {
+        if (idx === chapterIndex) return;
+        saveProgressBeacon();
+        window.location.href = ctx + '/reader?bookId=' + bookId + '&chapter=' + idx;
+    }
+    window.goToChapter = goToChapter;
     if (prevBtn) prevBtn.addEventListener('click', function() { goChapter(chapterIndex - 1); });
     if (nextBtn) nextBtn.addEventListener('click', function() { goChapter(chapterIndex + 1); });
 
@@ -250,6 +258,8 @@
     var saveTimer = null;
     function saveProgress(idx, scrollPercent, callback) {
         var pct = scrollPercent != null ? scrollPercent : Math.round(scrollWrap.scrollTop / Math.max(1, scrollWrap.scrollHeight - scrollWrap.clientHeight) * 100);
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
         var body = 'action=save_progress&bookId=' + bookId + '&chapterIndex=' + (idx || chapterIndex) + '&scrollPercent=' + pct;
         fetch(ctx + '/reader', {
             method: 'POST',
@@ -257,22 +267,43 @@
             body: body
         }).then(function() { if (callback) callback(); }).catch(function() { if (callback) callback(); });
     }
+
+    // 用 sendBeacon 可靠地保存（页面卸载时）
+    function saveProgressBeacon() {
+        var pct = Math.round(scrollWrap.scrollTop / Math.max(1, scrollWrap.scrollHeight - scrollWrap.clientHeight) * 100);
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        var params = new URLSearchParams();
+        params.append('action', 'save_progress');
+        params.append('bookId', bookId);
+        params.append('chapterIndex', chapterIndex);
+        params.append('scrollPercent', pct);
+        try {
+            navigator.sendBeacon(ctx + '/reader', params);
+        } catch (ex) {}
+    }
+
+    // 滚动节流保存（2秒间隔）
     scrollWrap.addEventListener('scroll', function() {
         clearTimeout(saveTimer);
         saveTimer = setTimeout(function() {
             var now = Date.now();
-            if (now - lastSave > 4000) { lastSave = now; saveProgress(chapterIndex, null); }
-        }, 600);
+            if (now - lastSave > 2000) { lastSave = now; saveProgress(chapterIndex, null); }
+        }, 500);
     });
-    window.addEventListener('beforeunload', function() {
-        var pct = Math.round(scrollWrap.scrollTop / Math.max(1, scrollWrap.scrollHeight - scrollWrap.clientHeight) * 100);
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', ctx + '/reader', false);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.send('action=save_progress&bookId=' + bookId + '&chapterIndex=' + chapterIndex + '&scrollPercent=' + pct);
-        } catch (ex) {}
+
+    // 定时保存（每10秒强制保存一次，防止只滚不停的情况遗漏）
+    setInterval(function() {
+        saveProgress(chapterIndex, null);
+        lastSave = Date.now();
+    }, 10000);
+
+    // 页面退出/隐藏时保存
+    window.addEventListener('beforeunload', saveProgressBeacon);
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') saveProgressBeacon();
     });
+    window.addEventListener('pagehide', saveProgressBeacon);
 
     // ---- 目录自动定位到当前章节 ----
     (function scrollTocToActive() {
@@ -285,15 +316,19 @@
         }
     })();
 
-    // ---- 恢复上次滚动位置 ----
-    (function restoreScroll() {
+    // ---- 恢复上次滚动位置（等 DOM 渲染完成） ----
+    function restoreScroll() {
         if (scrollRestore > 0 && scrollWrap) {
             var maxScroll = scrollWrap.scrollHeight - scrollWrap.clientHeight;
             if (maxScroll > 0) {
                 scrollWrap.scrollTop = Math.round(maxScroll * scrollRestore / 100);
             }
         }
-    })();
+    }
+    // 双重 rAF 确保浏览器完成布局计算后再设置 scrollTop
+    requestAnimationFrame(function() {
+        requestAnimationFrame(restoreScroll);
+    });
 })();
 </script>
 </body>

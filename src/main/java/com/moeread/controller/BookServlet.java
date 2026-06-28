@@ -180,6 +180,12 @@ public class BookServlet extends HttpServlet {
             // 封面图片上传
             ok = handleCoverUpload(request, response, user, ctx);
             return; // upload_cover 自己处理响应
+        } else if ("remove_cover".equals(action)) {
+            int bookId = parseInt(request.getParameter("bookId"));
+            Book b = bookDAO.findById(bookId);
+            if (b != null && b.getUserId() == user.getId()) {
+                ok = bookDAO.updateCoverImage(bookId, null);
+            }
         }
 
         // 简单 JSON 响应（AJAX 用）
@@ -232,10 +238,11 @@ public class BookServlet extends HttpServlet {
             String fileName = "cover_" + bookId + "_" + System.currentTimeMillis() + ext;
             filePart.write(uploadDir + File.separator + fileName);
 
-            // 更新数据库路径
-            String relativePath = ctx + "/uploads/covers/" + fileName;
+            // 更新数据库路径（不带 ctx，JSP 渲染时统一拼）
+            String relativePath = "/uploads/covers/" + fileName;
             boolean ok = bookDAO.updateCoverImage(bookId, relativePath);
-            out.write("{\"success\":" + ok + ",\"url\":\"" + relativePath + "\"}");
+            String fullUrl = ctx + relativePath;
+            out.write("{\"success\":" + ok + ",\"url\":\"" + fullUrl + "\"}");
             out.flush();
             return ok;
 

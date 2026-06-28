@@ -64,3 +64,7 @@ SQL: src/main/resources/moeread.sql
 - 每完成大版本要 commit 到 GitHub
 - 绝对禁止emoji，所有图标用 SVG/CSS
 - 书籍卡片: 封面占满, 底部毛玻璃遮盖, 圆形进度环默认隐藏hover显示
+
+## 开发坑位（备忘）
+- **Multipart 请求**: FormData/fetch 发的是 multipart/form-data，Servlet 必须加 @MultipartConfig 否则 `request.getParameter()` 返回 null。commons-fileupload 的 parseRequest 会消费 input stream，不能和 @MultipartConfig 的 `request.getPart()` 混用。
+- **阅读时间统计**: 每次 save_progress 成功时调用 statsDAO.addTodayMinutes(userId, 1) 累加 1 分钟。reading_stats 表用 ON DUPLICATE KEY UPDATE 自动 upsert。

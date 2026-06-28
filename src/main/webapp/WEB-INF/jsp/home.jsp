@@ -92,6 +92,8 @@
                     <div class="recommend-cover cover-<%=recommend.getId() % 6 + 1%>"
                         <% if (recommend.getCoverImagePath() != null && !recommend.getCoverImagePath().isEmpty()) { %>
                          style="background-image: url('<%=ctx%><%=recommend.getCoverImagePath()%>'); background-size: cover; background-position: center;"
+                        <% } else if (recommend.getCoverColor() != null) { %>
+                         style="background: <%=recommend.getCoverColor()%>;"
                         <% } %>>
                         <span class="recommend-cover-title"><%=recommend.getTitle()%></span>
                     </div>

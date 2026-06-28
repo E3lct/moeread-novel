@@ -27,7 +27,7 @@
     String coverImagePath = b.getCoverImagePath();
     StringBuilder coverInline = new StringBuilder();
     if (coverImagePath != null && !coverImagePath.isEmpty()) {
-        coverInline.append("background-image:url(").append(coverImagePath).append(");");
+        coverInline.append("background-image:url(").append(ctx).append(coverImagePath).append(");background-size:cover;background-position:center;");
     } else if (b.getCoverColor() != null) {
         coverInline.append("background:").append(b.getCoverColor()).append(";");
     }

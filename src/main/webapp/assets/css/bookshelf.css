@@ -831,13 +831,9 @@
     gap: 8px;
 }
 
-#coverFileInput {
-    font-size: var(--font-size-sm);
-}
-
 .cover-upload-preview {
-    width: 100%;
-    height: 100px;
+    width: 90px;
+    height: 120px;
     border-radius: var(--radius-md);
     background: var(--color-bg);
     border: 1px dashed var(--color-border-neutral);
@@ -846,17 +842,102 @@
     justify-content: center;
     overflow: hidden;
     position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.cover-upload-preview:hover {
+    border-color: var(--color-primary);
+}
+.cover-upload-preview.has-image {
+    border-style: solid;
+    border-color: var(--color-border);
+}
+.cover-upload-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.cover-upload-placeholder {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-align: center;
+    padding: 0 8px;
 }
 
-.cover-upload-preview img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+.cover-upload-actions {
+    display: flex;
+    gap: 8px;
 }
 
 .cover-upload-hint {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
+}
+
+/* ===== 封面剪裁弹窗 ===== */
+.modal-card-sm {
+    max-width: 420px;
+}
+
+.crop-container {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.crop-frame {
+    width: 180px;
+    height: 240px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    background: #1a1a1a;
+    cursor: grab;
+    user-select: none;
+}
+.crop-frame:active { cursor: grabbing; }
+
+.crop-frame img {
+    position: absolute;
+    max-width: none;
+    max-height: none;
+    pointer-events: none;
+}
+
+/* 裁剪框遮罩（上下半透明区域） */
+.crop-overlay-top,
+.crop-overlay-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.crop-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 4px;
+}
+
+.crop-zoom-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+.crop-zoom-label span { flex-shrink: 0; }
+.crop-zoom-label input[type="range"] {
+    flex: 1;
+    accent-color: var(--color-primary);
+}
+
+.crop-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-align: center;
 }
 
 .btn-sm {
