@@ -1,0 +1,330 @@
+/* ===================================
+   摸鱼模式样式 - VS Code 伪装界面
+   深色/浅色切换 · 阅读内容藏于代码注释
+   =================================== */
+
+.stealth-root {
+    --st-bg: #1e1e1e;
+    --st-bg2: #252526;
+    --st-bg3: #2d2d30;
+    --st-border: #3c3c3c;
+    --st-text: #cccccc;
+    --st-text-dim: #808080;
+    --st-accent: #007acc;
+    --st-accent-dim: rgba(0, 122, 204, 0.15);
+    --st-green: #4ec9b0;
+    --st-yellow: #e5c07b;
+    --st-red: #f14c4c;
+    --st-scrollbar: #424242;
+
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", "Consolas", monospace;
+    color: var(--st-text);
+    background: var(--st-bg);
+    transition: background 0.15s;
+}
+
+/* 浅色主题 */
+.stealth-root.theme-light {
+    --st-bg: #ffffff;
+    --st-bg2: #f3f3f3;
+    --st-bg3: #ececec;
+    --st-border: #d4d4d4;
+    --st-text: #333333;
+    --st-text-dim: #616161;
+    --st-accent: #0078d4;
+    --st-accent-dim: rgba(0, 120, 212, 0.08);
+    --st-scrollbar: #c7c7c7;
+}
+
+/* ===== 滚动条 - VS Code 风格 ===== */
+.stealth-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.stealth-root ::-webkit-scrollbar-track { background: var(--st-bg); }
+.stealth-root ::-webkit-scrollbar-thumb {
+    background: var(--st-scrollbar);
+    border-radius: 5px;
+}
+.stealth-root ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* ===== 标题栏 ===== */
+.st-titlebar {
+    height: 30px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 20px;
+    background: var(--st-bg2);
+    border-bottom: 1px solid var(--st-border);
+    font-size: 13px;
+}
+
+.st-titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+.st-menu-icon {
+    font-size: 18px !important;
+    color: var(--st-text-dim) !important;
+    cursor: default;
+}
+.st-titlebar-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--st-text-dim);
+}
+.st-titlebar-center { flex: 1; }
+.st-titlebar-right { display: flex; align-items: center; gap: 8px; }
+
+.st-tb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border: none;
+    background: transparent;
+    color: var(--st-text-dim);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.st-tb-btn:hover { background: rgba(255,255,255,0.06); }
+.st-theme-root.theme-light .st-tb-btn:hover { background: rgba(0,0,0,0.04); }
+
+/* ===== 主区域（侧边栏 + 编辑器）===== */
+.st-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ===== 左侧活动栏 ===== */
+.st-sidebar {
+    width: 48px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: 4px;
+    background: var(--st-bg2);
+    border-right: 1px solid var(--st-border);
+}
+
+.st-sb-item {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--st-text-dim);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.1s;
+}
+.st-sb-item:hover,
+.st-sb-item.active { color: var(--st-text); }
+.st-sb-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--st-accent);
+}
+.st-sb-icon { font-size: 22px; font-weight: normal; letter-spacing: 0; }
+
+.sb-bottom { margin-top: auto; }
+
+/* ===== 文件管理器侧边栏 ===== */
+.st-explorer {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--st-bg2);
+    border-right: 1px solid var(--st-border);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.2s ease, opacity 0.2s ease;
+    overflow: hidden;
+}
+.st-explorer.collapsed { width: 0; opacity: 0; border-right: 0; }
+
+.st-exp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--st-text-dim);
+    font-weight: 600;
+}
+.st-exp-toggle {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+    font-size: 14px;
+    user-select: none;
+}
+.st-exp-toggle:hover { opacity: 1; }
+.st-exp-body { overflow-y: auto; flex: 1; }
+
+.st-exp-section { margin-bottom: 4px; }
+.st-exp-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px 4px;
+    font-size: 12px;
+    color: var(--st-text);
+    cursor: pointer;
+    user-select: none;
+}
+.st-exp-arrow { font-size: 9px; color: var(--st-text-dim); }
+.st-exp-files { padding-left: 18px; }
+
+.st-file {
+    display: flex;
+    align-items: center;
+    padding: 3px 12px 3px;
+    font-size: 12px;
+    color: var(--st-text-dim);
+    text-decoration: none;
+    border-radius: 2px;
+    transition: background 0.07s, color 0.07s;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.st-file:hover { background: rgba(255,255,255,0.04); color: var(--st-text); }
+.st-file.active { background: var(--st-accent-dim); color: var(--st-accent); }
+
+/* ===== 编辑器区域 ===== */
+.st-editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 标签栏 */
+.st-tabs {
+    display: flex;
+    height: 35px;
+    align-items: center;
+    background: var(--st-bg2);
+    border-bottom: 1px solid var(--st-border);
+    flex-shrink: 0;
+}
+.st-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    height: 100%;
+    font-size: 12px;
+    color: var(--st-text-dim);
+    border-right: 1px solid var(--st-border);
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.07s;
+}
+.st-tab:hover { background: rgba(255,255,255,0.04); }
+.st-tab.active {
+    background: var(--st-bg3);
+    color: var(--st-text);
+}
+.st-tab-close {
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.5;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.st-tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+/* 编辑器主体 */
+.st-editor {
+    display: flex;
+    flex: 1;
+    overflow: auto;
+    background: var(--st-bg);
+}
+
+/* 行号区 */
+.st-gutter-left {
+    width: 52px;
+    flex-shrink: 0;
+    background: var(--st-bg);
+    border-right: 1px solid var(--st-border);
+    text-align: right;
+    padding: 0 4px;
+    user-select: none;
+    font-size: 11px;
+    line-height: 21px;
+    color: var(--st-text-dim);
+    font-family: Consolas, "Courier New", monospace;
+}
+.st-line-no { height: 21px; }
+
+/* 代码内容区 */
+.st-code-content {
+    flex: 1;
+    overflow: auto;
+}
+.st-code-content pre {
+    margin: 0;
+    padding: 12px 0 120px;
+    font-family: Consolas, "Courier New", "Source Code Pro", monospace;
+    font-size: 13.5px;
+    line-height: 21px;
+    color: var(--st-text);
+    white-space: pre-wrap;
+    word-break: break-all;
+    tab-size: 4;
+}
+
+/* 注释颜色 */
+.st-code-content pre { /* 默认注释色即可，看起来像普通文本 */ }
+
+/* ===== 状态栏 ===== */
+.st-statusbar {
+    height: 24px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 11px;
+    color: var(--st-text-dim);
+    background: var(--st-status-bar-bg, var(--st-accent-dim));
+    border-top: 1px solid var(--st-border);
+}
+.st-st-left, .st-st-right { display: flex; align-items: center; gap: 16px; }
+.st-st-item { white-space: nowrap; }
+.st-st-lang { color: var(--st-text-dim); }
+.st-st-git.clean { color: var(--st-green); }
+
+/* 响应式：小屏幕隐藏文件列表 */
+@media (max-width: 800px) {
+    .st-explorer { width: 160px; }
+    .st-gutter-left { width: 40px; font-size: 10px; }
+    .st-file { font-size: 11px; }
+}
+@media (max-width: 600px) {
+    .st-explorer { display: none; } /* 小屏默认隐藏 */
+}

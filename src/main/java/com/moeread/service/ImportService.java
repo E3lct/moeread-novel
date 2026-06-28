@@ -4,16 +4,14 @@ import com.moeread.dao.BookDAO;
 import com.moeread.dao.ChapterDAO;
 import com.moeread.model.Book;
 import com.moeread.model.Chapter;
+import com.moeread.util.LegadoTxtTocRules;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -32,15 +30,10 @@ public class ImportService {
     private BookDAO bookDAO = new BookDAO();
     private ChapterDAO chapterDAO = new ChapterDAO();
 
-    // 章节标题正则（支持：第一章 / 第1章 / 第123回 / 第一节 / 卷一 等）
-    private static final Pattern CHAPTER_PATTERN = Pattern.compile(
-        "^\\s*(第[零一二三四五六七八九十百千万0-9]+[章回节卷])\\s*[\\s:：、\\.\\-]*(.*)$"
-    );
-
-    // 英文章节：Chapter 1 / CHAPTER 1
-    private static final Pattern CHAPTER_EN_PATTERN = Pattern.compile(
-        "^\\s*(?:Chapter|CHAPTER)\\s*([0-9]+)\\s*[:：\\.\\-]*(.*)$"
-    );
+    // 单章最大字数（超过则按段落断点拆分，借鉴 Legado "拆分超长章节" 思路）
+    private static final int MAX_CHAPTER_WORDS = 30000;
+    // 选规则时取文件前 512KB 作样本（Legado TextFile 默认值）
+    private static final int SAMPLE_LIMIT = 524288;
 
     /**
      * 导入单个 txt 文件
@@ -117,62 +110,124 @@ public class ImportService {
     }
 
     /**
-     * 解析章节
-     * 逐行扫描，遇到 "第X章" 就开新章节
+     * 解析章节（移植 Legado TextFile 算法）
+     * 1. 取前 512KB 作样本，用 Legado 的 12 条默认规则选出最佳匹配规则
+     * 2. 用选中规则对全文做 MULTILINE 匹配，按匹配位置切分章节
+     * 3. 第一个匹配前的内容若非空，作为"前言"
+     * 4. 超长章节（>3万字）按段落断点自动拆分
+     * 5. 无规则命中则整篇作为一章
      */
     private List<Chapter> parseChapters(String content) {
-        List<Chapter> chapters = new ArrayList<>();
-        String[] lines = content.split("\\r?\\n");
+        List<Chapter> rawChapters = new ArrayList<>();
 
-        int chapterIndex = 0;
-        StringBuilder currentContent = new StringBuilder();
-        String currentTitle = null;
+        // 1. 选最佳规则
+        String sample = content.length() > SAMPLE_LIMIT ? content.substring(0, SAMPLE_LIMIT) : content;
+        int ruleIndex = LegadoTxtTocRules.selectBestRule(sample);
 
-        for (String line : lines) {
-            String trimmed = line.trim();
-            Matcher mZh = CHAPTER_PATTERN.matcher(trimmed);
-            Matcher mEn = CHAPTER_EN_PATTERN.matcher(trimmed);
-
-            if (mZh.matches() || mEn.matches()) {
-                // 遇到新章节标题，保存上一章
-                if (chapterIndex > 0) {
+        if (ruleIndex >= 0) {
+            // 2. 用选中规则切分全文
+            List<int[]> positions = LegadoTxtTocRules.splitChapters(content, ruleIndex);
+            if (!positions.isEmpty()) {
+                // 3. 第一个匹配前的内容作为"前言"
+                int firstStart = positions.get(0)[0];
+                if (firstStart > 0) {
+                    String preface = content.substring(0, firstStart).trim();
+                    if (!preface.isEmpty() && preface.length() > 50) {
+                        Chapter ch = new Chapter();
+                        ch.setChapterIndex(1);
+                        ch.setTitle("前言");
+                        ch.setContent(preface);
+                        ch.setWordCount(countWords(preface));
+                        rawChapters.add(ch);
+                    }
+                }
+                // 4. 各章节
+                for (int i = 0; i < positions.size(); i++) {
+                    int[] pos = positions.get(i);
+                    String title = content.substring(pos[0], pos[1]).trim();
+                    String body;
+                    if (i < positions.size() - 1) {
+                        body = content.substring(pos[1], positions.get(i + 1)[0]).trim();
+                    } else {
+                        body = content.substring(pos[1]).trim();
+                    }
                     Chapter ch = new Chapter();
-                    ch.setChapterIndex(chapterIndex);
-                    ch.setTitle(currentTitle != null ? currentTitle : "第" + chapterIndex + "章");
-                    String body = currentContent.toString().trim();
+                    ch.setChapterIndex(rawChapters.size() + 1);
+                    ch.setTitle(title);
                     ch.setContent(body);
                     ch.setWordCount(countWords(body));
-                    chapters.add(ch);
+                    rawChapters.add(ch);
                 }
-                // 开始新章节
-                chapterIndex++;
-                if (mZh.matches()) {
-                    currentTitle = mZh.group(1) + (mZh.group(2).isEmpty() ? "" : " " + mZh.group(2));
-                } else {
-                    currentTitle = mEn.group(0).trim();
-                }
-                currentContent = new StringBuilder();
-            } else {
-                // 正文行
-                if (currentContent.length() > 0) {
-                    currentContent.append("\n");
-                }
-                currentContent.append(line);
             }
         }
 
-        // 保存最后一章
-        if (chapterIndex > 0) {
+        // 5. 兜底：没识别到章节，整篇作为一章
+        if (rawChapters.isEmpty()) {
             Chapter ch = new Chapter();
-            ch.setChapterIndex(chapterIndex);
-            ch.setTitle(currentTitle != null ? currentTitle : "第" + chapterIndex + "章");
-            String body = currentContent.toString().trim();
-            ch.setContent(body);
-            ch.setWordCount(countWords(body));
-            chapters.add(ch);
+            ch.setChapterIndex(1);
+            ch.setTitle("全文");
+            ch.setContent(content.trim());
+            ch.setWordCount(countWords(content));
+            rawChapters.add(ch);
         }
 
-        return chapters;
+        // 6. 拆分超长章节
+        List<Chapter> result = new ArrayList<>();
+        for (Chapter ch : rawChapters) {
+            if (ch.getWordCount() > MAX_CHAPTER_WORDS) {
+                result.addAll(splitLongChapter(ch));
+            } else {
+                result.add(ch);
+            }
+        }
+        // 重新编号
+        for (int i = 0; i < result.size(); i++) {
+            result.get(i).setChapterIndex(i + 1);
+        }
+        return result;
+    }
+
+    /**
+     * 拆分超长章节（按段落断点，每段约 MAX_CHAPTER_WORDS 字）
+     */
+    private List<Chapter> splitLongChapter(Chapter ch) {
+        List<Chapter> parts = new ArrayList<>();
+        String content = ch.getContent();
+        // 按空行分段
+        String[] paragraphs = content.split("\\n\\s*\\n");
+        StringBuilder buf = new StringBuilder();
+        int partNum = 0;
+        int bufWords = 0;
+        for (String para : paragraphs) {
+            String p = para.trim();
+            if (p.isEmpty()) continue;
+            if (buf.length() > 0) buf.append("\n\n");
+            buf.append(p);
+            bufWords += countWords(p);
+            // 达到上限就切一段
+            if (bufWords >= MAX_CHAPTER_WORDS) {
+                partNum++;
+                Chapter part = new Chapter();
+                part.setChapterIndex(0); // 后面统一重新编号
+                part.setTitle(ch.getTitle() + "（" + partNum + "）");
+                part.setContent(buf.toString());
+                part.setWordCount(bufWords);
+                parts.add(part);
+                buf = new StringBuilder();
+                bufWords = 0;
+            }
+        }
+        // 剩余内容
+        if (bufWords > 0) {
+            partNum++;
+            Chapter part = new Chapter();
+            part.setChapterIndex(0);
+            part.setTitle(partNum == 1 ? ch.getTitle() : ch.getTitle() + "（" + partNum + "）");
+            part.setContent(buf.toString());
+            part.setWordCount(bufWords);
+            parts.add(part);
+        }
+        return parts;
     }
 
     /**

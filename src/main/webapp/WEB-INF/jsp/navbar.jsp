@@ -21,7 +21,6 @@
     <div class="navbar-nav">
         <a class="navbar-item <%= "/home".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/home">首页</a>
         <a class="navbar-item <%= "/book".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/book">书架</a>
-        <a class="navbar-item <%= "/import".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/import">导入</a>
         <a class="navbar-item <%= "/reader".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/reader">阅读</a>
         <a class="navbar-item <%= "/stats".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/stats">统计</a>
         <a class="navbar-item <%= "/settings".equals(currentPath) ? "active" : "" %>" href="${pageContext.request.contextPath}/settings">设置</a>

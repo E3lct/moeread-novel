@@ -178,6 +178,51 @@ public class BookDAO {
     }
 
     /**
+     * 更新图书元信息（书名 + 封面色）
+     */
+    public boolean updateMeta(int bookId, String title, String coverColor) {
+        String sql = "UPDATE books SET title = ?, cover_color = ? WHERE id = ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        boolean success = false;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, title);
+            ps.setString(2, coverColor);
+            ps.setInt(3, bookId);
+            success = ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(ps, conn);
+        }
+        return success;
+    }
+
+    /**
+     * 更新封面图片路径
+     */
+    public boolean updateCoverImage(int bookId, String coverImagePath) {
+        String sql = "UPDATE books SET cover_image_path = ? WHERE id = ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        boolean success = false;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, coverImagePath);
+            ps.setInt(2, bookId);
+            success = ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(ps, conn);
+        }
+        return success;
+    }
+
+    /**
      * 删除图书
      */
     public boolean delete(int bookId) {

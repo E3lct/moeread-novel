@@ -30,6 +30,7 @@
         <url-pattern>/home</url-pattern>
         <url-pattern>/book</url-pattern>
         <url-pattern>/reader</url-pattern>
+        <url-pattern>/stealth</url-pattern>
         <url-pattern>/stats</url-pattern>
         <url-pattern>/settings</url-pattern>
         <url-pattern>/import</url-pattern>
