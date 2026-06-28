@@ -1,7 +1,8 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.util.Map" %>
 <%
     // 此片段由 book.jsp 静态 include 引入
-    // 外层循环已定义：Book b; int coverIdx; List<String> bTags; String ctx;
+    // 外层循环已定义：Book b; int coverIdx; List<String> bTags; String ctx; Map<Integer,Integer> progressMap;
     String statusBadge = "";
     String statusClass = "";
     if ("reading".equals(b.getStatus())) {
@@ -41,8 +42,11 @@
      data-tags='<%=tagsJson%>'
      onclick="window.location.href='<%=ctx%>/reader?bookId=<%=b.getId()%>'">
     <div class="book-cover cover-<%=coverIdx%>" style="<%=coverInline%>">
-        <!-- 上半部：封面标题 -->
+        <!-- 封面标题（hover 时隐藏） -->
         <span class="book-cover-title"><%=titleForHtml%></span>
+
+        <%-- hover 进度环（正中间，默认隐藏） --%>
+        <%@ include file="_progress_ring.jsp" %>
 
         <%-- 右上角爱心 --%>
         <% if (b.getIsFavorite() == 1) { %>

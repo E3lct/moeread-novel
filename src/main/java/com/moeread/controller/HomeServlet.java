@@ -14,6 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 首页控制器 (Controller)
@@ -61,6 +62,9 @@ public class HomeServlet extends HttpServlet {
         // 总书数（用于空状态判断）
         int totalBooks = bookDAO.findByUserId(user.getId()).size();
 
+        // 阅读进度 Map（bookId -> chapterIndex）
+        Map<Integer, Integer> progressMap = progressDAO.findProgressMap(user.getId());
+
         request.setAttribute("user", user);
         request.setAttribute("todayMinutes", todayMinutes);
         request.setAttribute("dailyGoal", dailyGoal);
@@ -70,6 +74,7 @@ public class HomeServlet extends HttpServlet {
         request.setAttribute("favoriteBooks", favoriteBooks);
         request.setAttribute("recommend", recommend);
         request.setAttribute("totalBooks", totalBooks);
+        request.setAttribute("progressMap", progressMap);
 
         request.getRequestDispatcher("/WEB-INF/jsp/home.jsp").forward(request, response);
     }

@@ -323,6 +323,29 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     word-break: break-all;
     line-height: 1.45;
+    transition: opacity 0.2s;
+}
+
+/* ===== hover 进度环（首页复用书架样式）===== */
+.home-book-cover .book-progress-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+.home-book-cover .book-progress-ring svg {
+    display: block;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));
+}
+.home-book:hover .home-book-cover .book-progress-ring {
+    opacity: 1;
+}
+.home-book:hover .home-book-cover-title {
+    opacity: 0;
 }
 
 .home-book-fav {

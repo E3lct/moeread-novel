@@ -9,7 +9,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 阅读进度数据访问层 (DAO)
@@ -96,6 +98,31 @@ public class ReadProgressDAO {
             DBUtil.close(rs, ps, conn);
         }
         return list;
+    }
+
+    /**
+     * 查询用户所有书的阅读进度 Map<bookId, chapterIndex>
+     */
+    public Map<Integer, Integer> findProgressMap(int userId) {
+        String sql = "SELECT book_id, chapter_index FROM read_progress WHERE user_id = ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        Map<Integer, Integer> map = new HashMap<>();
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setInt(1, userId);
+            rs = ps.executeQuery();
+            while (rs.next()) {
+                map.put(rs.getInt("book_id"), rs.getInt("chapter_index"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(rs, ps, conn);
+        }
+        return map;
     }
 
     /**

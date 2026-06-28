@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="com.moeread.model.*" %>
 <%@ page import="java.util.List" %>
+<%@ page import="java.util.Map" %>
 <%!
     // 字数格式化：超过万用"万"为单位
     String fmtWords(int w) {
@@ -18,6 +19,8 @@
     List<Book> recentBooks = (List<Book>) request.getAttribute("recentBooks");
     @SuppressWarnings("unchecked")
     List<Book> favoriteBooks = (List<Book>) request.getAttribute("favoriteBooks");
+    @SuppressWarnings("unchecked")
+    Map<Integer, Integer> progressMap = (Map<Integer, Integer>) request.getAttribute("progressMap");
     Book recommend = (Book) request.getAttribute("recommend");
     int totalBooks = (Integer) request.getAttribute("totalBooks");
     String ctx = request.getContextPath();
@@ -141,6 +144,8 @@
                         <% if (coverStyle.isEmpty()) { %>
                             <span class="home-book-cover-title"><%=b.getTitle()%></span>
                         <% } %>
+                        <%-- hover 进度环 --%>
+                        <%@ include file="_progress_ring.jsp" %>
                         <% if (b.getIsFavorite() == 1) { %>
                             <svg class="home-book-fav" viewBox="0 0 16 16" fill="#FFFFFF" stroke="#D97706" stroke-width="0.5">
                                 <path d="M8 14.2s-5.3-3.7-5.3-7.5c0-1.6 1.1-2.7 2.6-2.7 1.1 0 2 .6 2.7 1.6.7-1 1.6-1.6 2.7-1.6 1.5 0 2.6 1.1 2.6 2.7 0 3.8-5.3 7.5-5.3 7.5z"/>
@@ -182,6 +187,8 @@
                         <% if (coverStyle.isEmpty()) { %>
                             <span class="home-book-cover-title"><%=b.getTitle()%></span>
                         <% } %>
+                        <%-- hover 进度环 --%>
+                        <%@ include file="_progress_ring.jsp" %>
                     </div>
                     <div class="home-book-info">
                         <div class="home-book-title text-ellipsis"><%=b.getTitle()%></div>

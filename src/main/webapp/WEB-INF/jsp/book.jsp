@@ -11,6 +11,8 @@
     List<String> allTags = (List<String>) request.getAttribute("allTags");
     @SuppressWarnings("unchecked")
     Map<Integer, List<String>> tagMap = (Map<Integer, List<String>>) request.getAttribute("tagMap");
+    @SuppressWarnings("unchecked")
+    Map<Integer, Integer> progressMap = (Map<Integer, Integer>) request.getAttribute("progressMap");
 
     String currentStatus = (String) request.getAttribute("currentStatus");
     String currentFavorite = (String) request.getAttribute("currentFavorite");

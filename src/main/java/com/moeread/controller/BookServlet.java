@@ -2,6 +2,7 @@ package com.moeread.controller;
 
 import com.moeread.dao.BookDAO;
 import com.moeread.dao.BookTagDAO;
+import com.moeread.dao.ReadProgressDAO;
 import com.moeread.model.Book;
 import com.moeread.model.User;
 
@@ -33,6 +34,7 @@ public class BookServlet extends HttpServlet {
 
     private BookDAO bookDAO = new BookDAO();
     private BookTagDAO tagDAO = new BookTagDAO();
+    private ReadProgressDAO progressDAO = new ReadProgressDAO();
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -114,6 +116,7 @@ public class BookServlet extends HttpServlet {
 
         request.setAttribute("books", filtered);
         request.setAttribute("groupedBooks", groupedBooks);
+        request.setAttribute("progressMap", progressDAO.findProgressMap(user.getId()));
         request.setAttribute("currentStatus", status == null ? "all" : status);
         request.setAttribute("currentFavorite", favorite);
         request.setAttribute("currentQ", q == null ? "" : q);
