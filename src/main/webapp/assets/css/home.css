@@ -1,0 +1,392 @@
+/* ===================================
+   首页样式
+   今日阅读环 + 推荐位 + 最近在读 + 喜爱书籍
+   =================================== */
+
+.home-page {
+    min-height: calc(100vh - var(--nav-height));
+    padding-top: calc(var(--nav-height) + 24px);
+    padding-bottom: 48px;
+}
+
+.home-content {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0 var(--content-padding);
+}
+
+/* ===== 封面色系（6 种渐变，与书架一致） ===== */
+.cover-1 { background: var(--cover-1); }
+.cover-2 { background: var(--cover-2); }
+.cover-3 { background: var(--cover-3); }
+.cover-4 { background: var(--cover-4); }
+.cover-5 { background: var(--cover-5); }
+.cover-6 { background: var(--cover-6); }
+
+/* ===== 顶部：今日阅读 + 推荐位 ===== */
+.home-top {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 40px;
+    align-items: stretch;
+}
+
+/* 今日阅读卡 */
+.today-card {
+    width: 340px;
+    flex-shrink: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(145deg, #F59E0B 0%, #D97706 100%);
+    box-shadow: 0 6px 20px rgba(217, 119, 6, 0.28);
+}
+
+.today-card-inner {
+    padding: 24px 24px 20px;
+    color: #FFFFFF;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.today-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.today-label {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.today-goal {
+    font-size: 12px;
+    opacity: 0.82;
+}
+
+.today-ring-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    margin: 8px 0 4px;
+    flex: 1;
+}
+
+.today-ring text {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+                 "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.ring-progress {
+    transition: stroke-dashoffset 1s ease-out;
+}
+
+.today-done-badge {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.today-footer {
+    text-align: center;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.streak-num {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 2px;
+}
+
+/* 推荐位 */
+.recommend-card {
+    flex: 1;
+    border-radius: 16px;
+    background: linear-gradient(140deg, #FFFBEB 0%, #FEF3C7 100%);
+    border: 1px solid #FDE68A;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: var(--color-text);
+    transition: box-shadow 0.2s, transform 0.2s;
+    min-height: 220px;
+}
+
+.recommend-card:hover {
+    box-shadow: 0 6px 20px rgba(217, 119, 6, 0.14);
+    transform: translateY(-1px);
+    color: var(--color-text);
+}
+
+.recommend-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-hint);
+    margin-bottom: 14px;
+    letter-spacing: 0.05em;
+}
+
+.recommend-body {
+    display: flex;
+    gap: 18px;
+    flex: 1;
+    align-items: center;
+}
+
+.recommend-cover {
+    width: 92px;
+    height: 124px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+}
+
+.recommend-cover-title {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.recommend-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recommend-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 8px;
+}
+
+.recommend-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin-bottom: 12px;
+}
+
+.recommend-meta {
+    font-size: 12px;
+    color: var(--color-text-hint);
+}
+
+/* 推荐位空状态 */
+.recommend-empty {
+    justify-content: center;
+}
+
+.recommend-empty-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    text-align: center;
+}
+
+.recommend-empty-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 6px;
+}
+
+.recommend-empty-hint {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+}
+
+.recommend-empty-btn {
+    background: var(--color-primary);
+    color: #FFFFFF;
+    padding: 8px 24px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+}
+
+.recommend-empty-btn:hover {
+    background: var(--color-primary-dark);
+    color: #FFFFFF;
+}
+
+/* ===== 书籍区域 ===== */
+.home-section {
+    margin-bottom: 36px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.section-heart {
+    width: 16px;
+    height: 16px;
+}
+
+.section-more {
+    font-size: 13px;
+    color: var(--color-text-hint);
+    transition: color 0.15s;
+}
+
+.section-more:hover {
+    color: var(--color-primary-dark);
+}
+
+/* 横向书籍列表 */
+.book-row {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-behavior: smooth;
+}
+
+/* 单本书卡片 */
+.home-book {
+    flex-shrink: 0;
+    width: 130px;
+    text-decoration: none;
+    color: var(--color-text);
+    display: block;
+    transition: transform 0.15s;
+}
+
+.home-book:hover {
+    transform: translateY(-2px);
+    color: var(--color-text);
+}
+
+.home-book-cover {
+    width: 130px;
+    height: 180px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    box-shadow: 0 3px 10px rgba(217, 119, 6, 0.16);
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.home-book:hover .home-book-cover {
+    box-shadow: 0 8px 20px rgba(217, 119, 6, 0.28);
+}
+
+.home-book-cover-title {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    word-break: break-all;
+    line-height: 1.45;
+}
+
+.home-book-fav {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 18px;
+    height: 18px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.home-book-info {
+    padding: 10px 2px 0;
+}
+
+.home-book-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: 3px;
+}
+
+.home-book-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+/* ===== 引导区 ===== */
+.home-guide {
+    background: var(--color-bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--color-border-light);
+    padding: 32px;
+    text-align: center;
+}
+
+.guide-text {
+    font-size: 15px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+}
+
+.guide-btn {
+    display: inline-block;
+    background: var(--color-primary);
+    color: #FFFFFF;
+    padding: 8px 28px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+}
+
+.guide-btn:hover {
+    background: var(--color-primary-dark);
+    color: #FFFFFF;
+}
+
+/* ===== 响应式：窄屏时今日阅读和推荐位纵向堆叠 ===== */
+@media (max-width: 760px) {
+    .home-top {
+        flex-direction: column;
+    }
+    .today-card {
+        width: 100%;
+    }
+}

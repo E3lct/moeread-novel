@@ -108,6 +108,58 @@ public class BookDAO {
     }
 
     /**
+     * 查询用户喜爱的图书
+     */
+    public List<Book> findFavorites(int userId, int limit) {
+        String sql = "SELECT * FROM books WHERE user_id = ? AND is_favorite = 1 ORDER BY create_time DESC LIMIT ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        List<Book> list = new ArrayList<>();
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setInt(1, userId);
+            ps.setInt(2, limit);
+            rs = ps.executeQuery();
+            while (rs.next()) {
+                list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(rs, ps, conn);
+        }
+        return list;
+    }
+
+    /**
+     * 查询最近添加的图书（用于推荐位）
+     */
+    public List<Book> findRecentAdded(int userId, int limit) {
+        String sql = "SELECT * FROM books WHERE user_id = ? ORDER BY create_time DESC LIMIT ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        List<Book> list = new ArrayList<>();
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setInt(1, userId);
+            ps.setInt(2, limit);
+            rs = ps.executeQuery();
+            while (rs.next()) {
+                list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(rs, ps, conn);
+        }
+        return list;
+    }
+
+    /**
      * 更新图书统计信息（章节数、总字数）
      */
     public boolean updateStats(int bookId, int chapterCount, int totalWords) {
