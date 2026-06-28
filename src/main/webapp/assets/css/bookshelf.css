@@ -335,21 +335,42 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     background: rgba(255, 255, 255, 0.85);
+    border: none;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(6px);
     z-index: 3;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.15s, background 0.15s;
 }
-
+.book-favorite:hover {
+    transform: scale(1.12);
+    background: rgba(255, 255, 255, 0.95);
+}
 .book-favorite svg {
     width: 14px;
     height: 14px;
     fill: var(--color-primary-dark);
+    transition: fill 0.15s;
+}
+/* 未喜欢态：空心爱心，半透明 */
+.book-favorite-off {
+    opacity: 0;
+}
+.book-card:hover .book-favorite-off {
+    opacity: 0.65;
+}
+.book-favorite-off:hover {
+    opacity: 1 !important;
+}
+.book-favorite-off svg {
+    fill: rgba(255, 255, 255, 0.8);
 }
 
 /* ===== 模态弹窗 ===== */

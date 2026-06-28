@@ -46,9 +46,15 @@
 
         <%-- 右上角爱心 --%>
         <% if (b.getIsFavorite() == 1) { %>
-            <div class="book-favorite">
-                <svg viewBox="0 0 16 16"><path d="M8 14s-5-3.5-5-7a3 3 0 0 1 5-2.5A3 3 0 0 1 13 7c0 3.5-5 7-5 7z"/></svg>
-            </div>
+            <button type="button" class="book-favorite" data-fav="1"
+                    onclick="event.stopPropagation(); toggleFavorite(this, <%=b.getId()%>);" title="取消喜欢">
+                <svg viewBox="0 0 16 16"><path d="M8 14.2s-5.3-3.7-5.3-7.5c0-1.6 1.1-2.7 2.6-2.7 1.1 0 2 .6 2.7 1.6.7-1 1.6-1.6 2.7-1.6 1.5 0 2.6 1.1 2.6 2.7 0 3.8-5.3 7.5-5.3 7.5z"/></svg>
+            </button>
+        <% } else { %>
+            <button type="button" class="book-favorite book-favorite-off" data-fav="0"
+                    onclick="event.stopPropagation(); toggleFavorite(this, <%=b.getId()%>);" title="喜欢">
+                <svg viewBox="0 0 16 16"><path d="M8 14.2s-5.3-3.7-5.3-7.5c0-1.6 1.1-2.7 2.6-2.7 1.1 0 2 .6 2.7 1.6.7-1 1.6-1.6 2.7-1.6 1.5 0 2.6 1.1 2.6 2.7 0 3.8-5.3 7.5-5.3 7.5z"/></svg>
+            </button>
         <% } %>
 
         <%-- 左上角编辑按钮 --%>

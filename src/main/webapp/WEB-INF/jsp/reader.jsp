@@ -9,6 +9,7 @@
     List<Chapter> toc = (List<Chapter>) request.getAttribute("toc");
     int chapterIndex = (Integer) request.getAttribute("chapterIndex");
     int totalChapters = (Integer) request.getAttribute("totalChapters");
+    int scrollPercent = request.getAttribute("scrollPercent") != null ? (Integer) request.getAttribute("scrollPercent") : 0;
     boolean hasPrev = (Boolean) request.getAttribute("hasPrev");
     boolean hasNext = (Boolean) request.getAttribute("hasNext");
     String ctx = request.getContextPath();
@@ -138,6 +139,7 @@
     var ctx = '<%=ctx%>';
     var bookId = <%=book.getId()%>;
     var chapterIndex = <%=chapterIndex%>;
+    var scrollRestore = <%=scrollPercent%>;
     var hasPrev = <%=hasPrev%>;
     var hasNext = <%=hasNext%>;
 
@@ -247,13 +249,13 @@
     var lastSave = 0;
     var saveTimer = null;
     function saveProgress(idx, scrollPercent, callback) {
-        var fd = new FormData();
-        fd.append('action', 'save_progress');
-        fd.append('bookId', bookId);
-        fd.append('chapterIndex', idx || chapterIndex);
-        fd.append('scrollPercent', scrollPercent != null ? scrollPercent : Math.round(scrollWrap.scrollTop / Math.max(1, scrollWrap.scrollHeight - scrollWrap.clientHeight) * 100));
-        fetch(ctx + '/reader', { method: 'POST', body: fd })
-            .then(function() { if (callback) callback(); }).catch(function() { if (callback) callback(); });
+        var pct = scrollPercent != null ? scrollPercent : Math.round(scrollWrap.scrollTop / Math.max(1, scrollWrap.scrollHeight - scrollWrap.clientHeight) * 100);
+        var body = 'action=save_progress&bookId=' + bookId + '&chapterIndex=' + (idx || chapterIndex) + '&scrollPercent=' + pct;
+        fetch(ctx + '/reader', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        }).then(function() { if (callback) callback(); }).catch(function() { if (callback) callback(); });
     }
     scrollWrap.addEventListener('scroll', function() {
         clearTimeout(saveTimer);
@@ -271,6 +273,27 @@
             xhr.send('action=save_progress&bookId=' + bookId + '&chapterIndex=' + chapterIndex + '&scrollPercent=' + pct);
         } catch (ex) {}
     });
+
+    // ---- 目录自动定位到当前章节 ----
+    (function scrollTocToActive() {
+        var tocScroll = document.querySelector('.toc-scroll');
+        var activeItem = document.querySelector('.toc-item.active');
+        if (tocScroll && activeItem) {
+            var itemTop = activeItem.offsetTop;
+            var scrollMid = tocScroll.clientHeight / 2;
+            tocScroll.scrollTop = itemTop - scrollMid + activeItem.offsetHeight / 2;
+        }
+    })();
+
+    // ---- 恢复上次滚动位置 ----
+    (function restoreScroll() {
+        if (scrollRestore > 0 && scrollWrap) {
+            var maxScroll = scrollWrap.scrollHeight - scrollWrap.clientHeight;
+            if (maxScroll > 0) {
+                scrollWrap.scrollTop = Math.round(maxScroll * scrollRestore / 100);
+            }
+        }
+    })();
 })();
 </script>
 </body>

@@ -432,6 +432,31 @@
 
             // 暴露给卡片用
             window.__openBookEditor = openModal;
+
+            // ---- 喜爱切换 ----
+            window.toggleFavorite = function(btn, bookId) {
+                var isFav = btn.getAttribute('data-fav') === '1';
+                fetch(ctx + '/book', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=toggle_favorite&bookId=' + bookId
+                }).then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        if (isFav) {
+                            btn.setAttribute('data-fav', '0');
+                            btn.classList.add('book-favorite-off');
+                            btn.title = '喜欢';
+                        } else {
+                            btn.setAttribute('data-fav', '1');
+                            btn.classList.remove('book-favorite-off');
+                            btn.title = '取消喜欢';
+                        }
+                        // 刷新页面以更新计数
+                        setTimeout(function() { window.location.reload(); }, 300);
+                    }
+                });
+            };
         })();
     </script>
 </body>

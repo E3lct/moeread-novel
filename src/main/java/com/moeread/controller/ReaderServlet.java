@@ -3,11 +3,13 @@ package com.moeread.controller;
 import com.moeread.dao.BookDAO;
 import com.moeread.dao.ChapterDAO;
 import com.moeread.dao.ReadProgressDAO;
+import com.moeread.dao.ReadingStatsDAO;
 import com.moeread.model.Book;
 import com.moeread.model.Chapter;
 import com.moeread.model.User;
 
 import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -23,11 +25,13 @@ import java.util.List;
  * POST /reader?action=save_progress    保存阅读进度 (AJAX)
  */
 @WebServlet(name = "ReaderServlet", urlPatterns = {"/reader"})
+@MultipartConfig
 public class ReaderServlet extends HttpServlet {
 
     private BookDAO bookDAO = new BookDAO();
     private ChapterDAO chapterDAO = new ChapterDAO();
     private ReadProgressDAO progressDAO = new ReadProgressDAO();
+    private ReadingStatsDAO statsDAO = new ReadingStatsDAO();
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -52,9 +56,15 @@ public class ReaderServlet extends HttpServlet {
 
         // 当前章节：优先 URL 参数 -> 进度记录 -> 1
         int chapterIndex = parseInt(request.getParameter("chapter"));
+        int scrollPercent = 0;
         if (chapterIndex <= 0) {
             int[] p = progressDAO.find(user.getId(), bookId);
-            chapterIndex = (p != null && p[0] > 0) ? p[0] : 1;
+            if (p != null && p[0] > 0) {
+                chapterIndex = p[0];
+                scrollPercent = p[1];  // 恢复上次滚动位置
+            } else {
+                chapterIndex = 1;
+            }
         }
         if (chapterIndex > totalChapters) chapterIndex = totalChapters;
         if (chapterIndex < 1) chapterIndex = 1;
@@ -79,6 +89,7 @@ public class ReaderServlet extends HttpServlet {
         request.setAttribute("totalChapters", totalChapters);
         request.setAttribute("hasPrev", chapterIndex > 1);
         request.setAttribute("hasNext", chapterIndex < totalChapters);
+        request.setAttribute("scrollPercent", scrollPercent);
 
         request.getRequestDispatcher("/WEB-INF/jsp/reader.jsp").forward(request, response);
     }
@@ -99,6 +110,10 @@ public class ReaderServlet extends HttpServlet {
             Book b = bookDAO.findById(bookId);
             if (b != null && b.getUserId() == user.getId() && chapterIndex > 0) {
                 ok = progressDAO.upsert(user.getId(), bookId, chapterIndex, scrollPercent);
+                if (ok) {
+                    // 每次保存进度累加 1 分钟阅读时长
+                    statsDAO.addTodayMinutes(user.getId(), 1);
+                }
             }
         }
 

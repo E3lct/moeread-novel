@@ -5,16 +5,14 @@ import com.moeread.dao.BookTagDAO;
 import com.moeread.model.Book;
 import com.moeread.model.User;
 
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
-
 import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import javax.servlet.http.Part;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -30,6 +28,7 @@ import java.util.Map;
  * POST /book?action=  编辑操作：update_meta / add_tag / remove_tag / delete
  */
 @WebServlet(name = "BookServlet", urlPatterns = {"/book"})
+@MultipartConfig
 public class BookServlet extends HttpServlet {
 
     private BookDAO bookDAO = new BookDAO();
@@ -170,6 +169,13 @@ public class BookServlet extends HttpServlet {
                 tagDAO.removeAllTags(bookId);
                 ok = bookDAO.delete(bookId);
             }
+        } else if ("toggle_favorite".equals(action)) {
+            int bookId = parseInt(request.getParameter("bookId"));
+            Book b = bookDAO.findById(bookId);
+            if (b != null && b.getUserId() == user.getId()) {
+                int newFav = (b.getIsFavorite() == 1) ? 0 : 1;
+                ok = bookDAO.updateFavorite(bookId, newFav);
+            }
         } else if ("upload_cover".equals(action)) {
             // 封面图片上传
             ok = handleCoverUpload(request, response, user, ctx);
@@ -184,42 +190,26 @@ public class BookServlet extends HttpServlet {
     }
 
     /**
-     * 处理封面上传（multipart）
+     * 处理封面上传（使用 Servlet 3.0+ Part API）
      */
     private boolean handleCoverUpload(HttpServletRequest request, HttpServletResponse response,
                                         User user, String ctx) throws IOException {
         response.setContentType("application/json;charset=UTF-8");
         PrintWriter out = response.getWriter();
 
-        if (!ServletFileUpload.isMultipartContent(request)) {
-            out.write("{\"success\":false,\"error\":\"not_multipart\"}");
-            out.flush();
-            return false;
-        }
-
         try {
-            DiskFileItemFactory factory = new DiskFileItemFactory();
-            ServletFileUpload upload = new ServletFileUpload(factory);
-            upload.setFileSizeMax(2 * 1024 * 1024); // 2MB
+            int bookId = parseInt(request.getParameter("bookId"));
+            Part filePart = request.getPart("file");
 
-            List<FileItem> items = upload.parseRequest(request);
-            int bookId = -1;
-            FileItem fileItem = null;
-
-            for (FileItem item : items) {
-                if (item.isFormField()) {
-                    if ("bookId".equals(item.getFieldName())) {
-                        bookId = Integer.parseInt(item.getString("UTF-8"));
-                    }
-                } else {
-                    if (item.getSize() > 0) {
-                        fileItem = item;
-                    }
-                }
+            if (bookId <= 0 || filePart == null || filePart.getSize() == 0) {
+                out.write("{\"success\":false,\"error\":\"missing_params\"}");
+                out.flush();
+                return false;
             }
 
-            if (bookId <= 0 || fileItem == null) {
-                out.write("{\"success\":false,\"error\":\"missing_params\"}");
+            // 检查大小 2MB
+            if (filePart.getSize() > 2 * 1024 * 1024) {
+                out.write("{\"success\":false,\"error\":\"too_large\"}");
                 out.flush();
                 return false;
             }
@@ -234,12 +224,13 @@ public class BookServlet extends HttpServlet {
             // 保存到 /uploads/covers/ 目录
             String uploadDir = getServletContext().getRealPath("/uploads/covers");
             new File(uploadDir).mkdirs();
-            String ext = fileItem.getName().lastIndexOf('.') > 0
-                    ? fileItem.getName().substring(fileItem.getName().lastIndexOf('.'))
+
+            String submittedName = filePart.getSubmittedFileName();
+            String ext = (submittedName != null && submittedName.lastIndexOf('.') > 0)
+                    ? submittedName.substring(submittedName.lastIndexOf('.'))
                     : ".jpg";
             String fileName = "cover_" + bookId + "_" + System.currentTimeMillis() + ext;
-            File uploadedFile = new File(uploadDir, fileName);
-            fileItem.write(uploadedFile);
+            filePart.write(uploadDir + File.separator + fileName);
 
             // 更新数据库路径
             String relativePath = ctx + "/uploads/covers/" + fileName;
