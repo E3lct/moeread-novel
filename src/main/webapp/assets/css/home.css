@@ -323,6 +323,7 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     word-break: break-all;
     line-height: 1.45;
+    opacity: 1;
     transition: opacity 0.2s;
 }
 
@@ -334,7 +335,8 @@
     transform: translate(-50%, -50%);
     z-index: 4;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s 0.2s;
     pointer-events: none;
 }
 .home-book-cover .book-progress-ring svg {
@@ -343,6 +345,8 @@
 }
 .home-book:hover .home-book-cover .book-progress-ring {
     opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0s 0s;
 }
 .home-book:hover .home-book-cover-title {
     opacity: 0;
@@ -412,4 +416,93 @@
     .today-card {
         width: 100%;
     }
+}
+
+/* ================================================================
+   全屏水波纹回收/展开效果
+   点击导航栏"墨读"触发，回收吸回按钮 / 展开扩散全屏
+   ================================================================ */
+
+/* ---- 导航栏墨读区域变成可点击的回收按钮（仅首页生效）---- */
+#mainNavbar .navbar-logo {
+    cursor: pointer;
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 10px 2px 4px;
+    margin-left: -4px;
+    border-radius: 20px;
+    transition: background 0.2s ease,
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#mainNavbar .navbar-logo:hover {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+#mainNavbar .navbar-logo:active {
+    transform: scale(0.94);
+}
+
+/* ---- 全屏波纹遮罩 ---- */
+.recycle-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 9000;
+    pointer-events: none;
+    display: none;
+    overflow: hidden;
+}
+
+/* 波纹圈本身：琥珀色半透明渐变圆 */
+.recycle-wave {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(circle,
+        rgba(245, 158, 11, 0.18) 0%,
+        rgba(245, 158, 11, 0.08) 35%,
+        rgba(245, 158, 11, 0.02) 60%,
+        transparent 80%
+    );
+    clip-path: circle(0px at 0 0);
+    will-change: clip-path, opacity;
+}
+
+/* ---- 导航栏回收状态：非 logo 元素淡出 ---- */
+#mainNavbar.nav-recycling .navbar-divider,
+#mainNavbar.nav-recycling .navbar-nav,
+#mainNavbar.nav-recycling .navbar-user {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+}
+
+#mainNavbar.nav-recycling {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* 恢复动画：导航栏元素依次出现 */
+#mainNavbar:not(.nav-recycling) .navbar-divider,
+#mainNavbar:not(.nav-recycling) .navbar-nav,
+#mainNavbar:not(.nav-recycling) .navbar-user {
+    transition: opacity 0.4s ease 0.15s;
+}
+
+/* ---- 页面内容淡出/淡入 ---- */
+.home-content.content-fading {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+}
+
+.home-content:not(.content-fading) {
+    transition: opacity 0.4s ease 0.2s;
 }

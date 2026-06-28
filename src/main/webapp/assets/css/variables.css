@@ -107,10 +107,14 @@ html, body {
     height: 100%;
 }
 
+html {
+    background-color: var(--color-bg);
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
                  "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
-    background-color: var(--color-bg);
+    background-color: transparent;
     color: var(--color-text);
     font-size: var(--font-size-md);
     line-height: 1.6;

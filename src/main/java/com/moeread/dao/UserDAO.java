@@ -105,7 +105,7 @@ public class UserDAO {
      * @return 成功返回 true
      */
     public boolean updateSettings(User user) {
-        String sql = "UPDATE users SET nickname = ?, daily_goal = ?, mascot_image = ?, mascot_opacity = ?, theme_mode = ? WHERE id = ?";
+        String sql = "UPDATE users SET nickname = ?, avatar = ?, daily_goal = ?, mascot_image = ?, mascot_opacity = ?, bg_scale = ?, bg_mirror = ?, theme_mode = ? WHERE id = ?";
         Connection conn = null;
         PreparedStatement ps = null;
         boolean success = false;
@@ -114,11 +114,14 @@ public class UserDAO {
             conn = DBUtil.getConnection();
             ps = conn.prepareStatement(sql);
             ps.setString(1, user.getNickname());
-            ps.setInt(2, user.getDailyGoal());
-            ps.setString(3, user.getMascotImage());
-            ps.setInt(4, user.getMascotOpacity());
-            ps.setString(5, user.getThemeMode());
-            ps.setInt(6, user.getId());
+            ps.setString(2, user.getAvatar());
+            ps.setInt(3, user.getDailyGoal());
+            ps.setString(4, user.getMascotImage());
+            ps.setInt(5, user.getMascotOpacity());
+            ps.setInt(6, user.getBgScale());
+            ps.setInt(7, user.getBgMirror());
+            ps.setString(8, user.getThemeMode());
+            ps.setInt(9, user.getId());
             int rows = ps.executeUpdate();
             success = (rows > 0);
         } catch (SQLException e) {
@@ -169,6 +172,8 @@ public class UserDAO {
         user.setDailyGoal(rs.getInt("daily_goal"));
         user.setMascotImage(rs.getString("mascot_image"));
         user.setMascotOpacity(rs.getInt("mascot_opacity"));
+        user.setBgScale(rs.getInt("bg_scale"));
+        user.setBgMirror(rs.getInt("bg_mirror"));
         user.setThemeMode(rs.getString("theme_mode"));
         user.setCreateTime(rs.getTimestamp("create_time"));
         return user;

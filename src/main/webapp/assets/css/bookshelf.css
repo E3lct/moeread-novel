@@ -253,6 +253,7 @@
     line-height: 1.4;
     word-break: break-word;
     padding: 8px;
+    opacity: 1;
     transition: opacity 0.2s;
 }
 
@@ -264,7 +265,8 @@
     transform: translate(-50%, -50%);
     z-index: 4;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s 0.2s;
     pointer-events: none;
     display: flex;
     align-items: center;
@@ -277,6 +279,8 @@
 /* hover 时：显示进度环，隐藏书名 */
 .book-card:hover .book-progress-ring {
     opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0s 0s;
 }
 .book-card:hover .book-cover-title {
     opacity: 0;

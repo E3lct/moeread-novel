@@ -16,6 +16,8 @@ public class User {
     private String mascotImage;
     private int mascotOpacity;
     private String themeMode;
+    private int bgScale;
+    private int bgMirror;
     private Date createTime;
 
     public int getId() {
@@ -88,6 +90,22 @@ public class User {
 
     public void setThemeMode(String themeMode) {
         this.themeMode = themeMode;
+    }
+
+    public int getBgScale() {
+        return bgScale;
+    }
+
+    public void setBgScale(int bgScale) {
+        this.bgScale = bgScale;
+    }
+
+    public int getBgMirror() {
+        return bgMirror;
+    }
+
+    public void setBgMirror(int bgMirror) {
+        this.bgMirror = bgMirror;
     }
 
     public Date getCreateTime() {

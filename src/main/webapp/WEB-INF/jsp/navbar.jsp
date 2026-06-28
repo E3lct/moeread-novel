@@ -10,7 +10,8 @@
 %>
 
 <%-- 顶部悬浮胶囊导航栏 (Mac 风格) --%>
-<div class="navbar">
+<%@ include file="_background.jsp" %>
+<div class="navbar" id="mainNavbar">
     <div class="navbar-logo">
         <div class="navbar-logo-circle">墨</div>
         <span class="navbar-logo-text">墨读</span>
@@ -30,7 +31,11 @@
 
     <div class="navbar-user" onclick="window.location.href='${pageContext.request.contextPath}/settings'">
         <div class="navbar-avatar">
-            <%= currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname().substring(0,1) : "U" %>
+            <% if (currentUser != null && currentUser.getAvatar() != null && !currentUser.getAvatar().isEmpty()) { %>
+                <img src="<%=currentUser.getAvatar()%>" alt="头像" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+            <% } else { %>
+                <%= currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname().substring(0,1) : "U" %>
+            <% } %>
         </div>
         <span class="navbar-username"><%= currentUser != null ? currentUser.getNickname() : "未登录" %></span>
     </div>

@@ -132,6 +132,32 @@
     white-space: nowrap;
 }
 
+/* 自定义背景层 - 全局固定，模仿 VSCode background 插件 */
+.bg-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-position: center center;
+    background-repeat: no-repeat;
+    z-index: -1;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+/* 页面内容层 - 在背景之上 */
+.navbar,
+.stats-page,
+.settings-page,
+.home-page,
+.main-content,
+.import-page,
+.reader-page,
+.reader-root {
+    position: relative;
+    z-index: 1;
+}
+
 /* 主内容区 - 顶部留白给悬浮导航栏 */
 .main-content {
     margin-top: 68px;

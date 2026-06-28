@@ -275,6 +275,55 @@ public class BookDAO {
     }
 
     /**
+     * 查询某用户的图书总数
+     */
+    public int countByUserId(int userId) {
+        String sql = "SELECT COUNT(*) FROM books WHERE user_id = ?";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setInt(1, userId);
+            rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(rs, ps, conn);
+        }
+        return 0;
+    }
+
+    /**
+     * 查询用户已读完的图书
+     */
+    public List<Book> findFinishedByUserId(int userId) {
+        String sql = "SELECT * FROM books WHERE user_id = ? AND status = 'finished' ORDER BY create_time DESC";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        List<Book> list = new ArrayList<>();
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setInt(1, userId);
+            rs = ps.executeQuery();
+            while (rs.next()) {
+                list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            DBUtil.close(rs, ps, conn);
+        }
+        return list;
+    }
+
+    /**
      * 删除图书
      */
     public boolean delete(int bookId) {

@@ -45,6 +45,11 @@
 <div class="home-page">
     <div class="home-content">
 
+        <!-- ===== 全屏水波纹遮罩（回收/展开用）===== -->
+        <div class="recycle-overlay" id="recycleOverlay">
+            <div class="recycle-wave" id="recycleWave"></div>
+        </div>
+
         <!-- ===== 顶部：今日阅读 + 推荐位 ===== -->
         <div class="home-top">
 
@@ -227,6 +232,129 @@
     requestAnimationFrame(function() {
         ring.style.transition = 'stroke-dashoffset 1s ease-out';
         ring.style.strokeDashoffset = target;
+    });
+})();
+
+// ===== 全屏水波纹回收/展开（点击导航栏墨读按钮触发）=====
+(function() {
+    var trigger   = document.querySelector('#mainNavbar .navbar-logo');  // 首页导航栏墨读按钮（仅首页生效）
+    var overlay   = document.getElementById('recycleOverlay');  // 全屏遮罩
+    var wave      = document.getElementById('recycleWave');     // 波纹圈
+    var navbar    = document.getElementById('mainNavbar');      // 导航栏
+    if (!trigger || !overlay || !wave) return;
+
+    var recycled  = false;
+    var animating = false;
+
+    // 视口对角线长度（用于计算波纹最大半径）
+    function getDiagonal() {
+        return Math.ceil(Math.sqrt(
+            Math.pow(window.innerWidth, 2) + Math.pow(window.innerHeight, 2)
+        ));
+    }
+
+    // 获取墨读按钮中心坐标（相对视口）
+    function getTriggerCenter() {
+        var r = trigger.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();  // 阻止冒泡
+        if (animating) return;
+        animating = true;
+
+        var tc = getTriggerCenter();
+        var diag = getDiagonal();
+
+        if (!recycled) {
+            // ========== 回收：全屏波纹 → 缩小吸回左上角按钮 ==========
+            recycled = true;
+
+            // 1. 显示遮罩层
+            overlay.classList.remove('hidden');
+            overlay.style.display = 'block';
+
+            // 2. 导航栏非 logo 部分立即隐藏（logo 保留）
+            navbar.classList.add('nav-recycling');
+
+            // 3. 页面内容区域开始淡出
+            document.querySelector('.home-content').classList.add('content-fading');
+
+            // 4. 波纹：从覆盖全屏的大圆 → 收缩到按钮位置
+            // 起始状态：圆心在右下角附近，半径=对角线
+            wave.style.clipPath =
+                'circle(' + diag + 'px at ' +
+                (window.innerWidth - 40) + 'px ' +
+                (window.innerHeight - 40) + 'px)';
+            wave.style.opacity = '1';
+
+            // 强制回流
+            void wave.offsetWidth;
+
+            // 动画到：圆心在墨读按钮位置，半径≈0
+            requestAnimationFrame(function() {
+                wave.style.transition = 'clip-path 1s cubic-bezier(0.55, 0, 0.15, 1), opacity 0.8s ease';
+                wave.style.clipPath =
+                    'circle(4px at ' + tc.x + 'px ' + tc.y + 'px)';
+                wave.style.opacity = '0';
+            });
+
+            // 动画结束
+            setTimeout(function() {
+                overlay.style.display = 'none';
+                wave.style.transition = '';
+                wave.style.opacity = '';
+                animating = false;
+            }, 1100);
+
+        } else {
+            // ========== 展开：从左上角按钮 → 扩散到右下角 ==========
+            recycled = false;
+
+            // 1. 显示遮罩层（初始透明）
+            overlay.style.display = 'block';
+            wave.style.opacity = '0';
+
+            // 2. 波纹起始状态：圆心在按钮位置，半径很小
+            wave.style.clipPath =
+                'circle(4px at ' + tc.x + 'px ' + tc.y + 'px)';
+            wave.style.transition = 'none';
+            wave.style.opacity = '0.6';
+
+            // 强制回流
+            void wave.offsetWidth;
+
+            // 3. 导航栏恢复
+            navbar.classList.remove('nav-recycling');
+
+            // 4. 内容淡入
+            document.querySelector('.home-content').classList.remove('content-fading');
+
+            // 5. 波纹扩散到覆盖整个视口
+            requestAnimationFrame(function() {
+                wave.style.transition = 'clip-path 0.85s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.7s ease';
+                wave.style.clipPath =
+                    'circle(' + diag + 'px at ' +
+                    (window.innerWidth - 20) + 'px ' +
+                    (window.innerHeight - 20) + 'px)';
+                wave.style.opacity = '0';
+            });
+
+            // 动画结束后清理
+            setTimeout(function() {
+                overlay.style.display = 'none';
+                wave.style.transition = '';
+                animating = false;
+            }, 1000);
+        }
+    });
+
+    // 窗口 resize 时重算
+    window.addEventListener('resize', function() {
+        if (!recycled && !animating) {
+            /* 正常状态下不需要处理 */
+        }
     });
 })();
 </script>

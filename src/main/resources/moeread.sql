@@ -11,10 +11,12 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE COMMENT '登录名',
     password VARCHAR(32) NOT NULL COMMENT 'MD5加密密码',
     nickname VARCHAR(50) COMMENT '昵称',
-    avatar VARCHAR(200) COMMENT '头像路径',
+    avatar LONGTEXT COMMENT '头像(base64)',
     daily_goal INT DEFAULT 30 COMMENT '每日阅读目标(分钟)',
-    mascot_image VARCHAR(200) COMMENT '看板娘图片路径',
-    mascot_opacity INT DEFAULT 80 COMMENT '看板娘透明度(0-100)',
+    mascot_image LONGTEXT COMMENT '背景图(base64)',
+    mascot_opacity INT DEFAULT 80 COMMENT '背景透明度(0-100)',
+    bg_scale INT DEFAULT 100 COMMENT '背景缩放百分比',
+    bg_mirror TINYINT DEFAULT 0 COMMENT '背景镜像: 0否 1是',
     theme_mode VARCHAR(10) DEFAULT 'light' COMMENT '显示模式: light/dark',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
