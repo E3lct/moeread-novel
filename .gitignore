@@ -46,3 +46,7 @@ src/main/webapp/assets/mascot/
 
 # workbuddy 项目记忆（不上传）
 .workbuddy/
+
+# 生成的文档（不上传）
+*.pptx
+*.docx
