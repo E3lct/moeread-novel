@@ -87,7 +87,9 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         // 解析章节
         List<Chapter> chapters = parseChapters(book.getId(), content);
         if (!chapters.isEmpty()) {
-            chapterMapper.insert(chapters);
+            for (Chapter ch : chapters) {
+                chapterMapper.insert(ch);
+            }
             book.setChapterCount(chapters.size());
             book.setTotalWords(content.length());
             updateById(book);
