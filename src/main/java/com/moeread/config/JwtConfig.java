@@ -1,7 +1,6 @@
 package com.moeread.config;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -33,9 +32,9 @@ public class JwtConfig {
         return Jwts.builder()
                 .claim("userId", userId)
                 .claim("username", username)
-                .setIssuedAt(now)
-                .setExpiration(exp)
-                .signWith(key, SignatureAlgorithm.HS256)
+                .issuedAt(now)
+                .expiration(exp)
+                .signWith(key)
                 .compact();
     }
 }

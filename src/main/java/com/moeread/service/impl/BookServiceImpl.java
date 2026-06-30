@@ -103,7 +103,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         List<Book> imported = new ArrayList<>();
         try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
             ZipEntry entry;
-            while ((entry = zis.nextEntry()) != null) {
+            while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) continue;
                 String name = entry.getName();
                 if (!name.toLowerCase().endsWith(".txt")) continue;
