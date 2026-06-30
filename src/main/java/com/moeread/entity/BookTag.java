@@ -13,7 +13,6 @@ public class BookTag {
     @TableId(type = IdType.AUTO)
     private Integer id;
 
-    private Integer userId;
     private Integer bookId;
-    private String tagName;
+    private Integer tagId;
 }

@@ -1,6 +1,6 @@
 package com.moeread.entity;
 
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -11,9 +11,13 @@ import java.time.LocalDateTime;
 @TableName("read_progress")
 public class ReadProgress {
 
+    @TableId(type = IdType.AUTO)
+    private Integer id;
+
     private Integer userId;
     private Integer bookId;
     private Integer chapterIndex;
-    private Integer scrollPercent;
+    private Integer scrollPosition;
+    private Integer progressPercent;
     private LocalDateTime updateTime;
 }

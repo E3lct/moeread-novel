@@ -1,8 +1,7 @@
 package com.moeread.entity;
 
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import java.time.LocalDate;
 
 /**
  * 阅读统计实体
@@ -11,8 +10,11 @@ import java.time.LocalDate;
 @TableName("reading_stats")
 public class ReadingStats {
 
+    @TableId(type = IdType.AUTO)
+    private Integer id;
+
     private Integer userId;
-    private LocalDate statDate;
-    private Integer readMinutes;
-    private Integer isCheckedIn;
+    @TableField("`date`")
+    private String date;
+    private Integer minutes;
 }
