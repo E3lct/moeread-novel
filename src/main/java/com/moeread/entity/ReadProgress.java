@@ -17,7 +17,6 @@ public class ReadProgress {
     private Integer userId;
     private Integer bookId;
     private Integer chapterIndex;
-    private Integer scrollPosition;
-    private Integer progressPercent;
+    private Integer scrollPercent;
     private LocalDateTime updateTime;
 }

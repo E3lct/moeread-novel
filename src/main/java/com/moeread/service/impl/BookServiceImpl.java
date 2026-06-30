@@ -274,7 +274,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                             .eq(ReadProgress::getBookId, book.getId())
                             .eq(ReadProgress::getUserId, userId));
             if (progress != null) {
-                vo.setReadProgress(progress.getProgressPercent());
+                vo.setReadProgress(progress.getScrollPercent());
                 vo.setCurrentChapter(progress.getChapterIndex());
             } else {
                 vo.setReadProgress(0);
@@ -286,8 +286,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                     new LambdaQueryWrapper<BookTag>().eq(BookTag::getBookId, book.getId()));
             List<String> tags = new ArrayList<>();
             for (BookTag bt : btList) {
-                Tag tag = tagMapper.selectById(bt.getTagId());
-                if (tag != null) tags.add(tag.getName());
+                tags.add(bt.getTagName());
             }
             vo.setTags(tags);
 

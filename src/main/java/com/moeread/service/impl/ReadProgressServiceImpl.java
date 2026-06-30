@@ -34,16 +34,17 @@ public class ReadProgressServiceImpl extends ServiceImpl<ReadProgressMapper, Rea
         }
 
         progress.setChapterIndex(chapterIndex);
-        progress.setScrollPosition(scrollPosition != null ? scrollPosition : 0);
-        progress.setUpdateTime(LocalDateTime.now());
 
-        // 计算百分比
+        // 计算百分比作为 scrollPercent 存储
         long totalChapters = chapterMapper.selectCount(
                 new LambdaQueryWrapper<Chapter>().eq(Chapter::getBookId, bookId));
         if (totalChapters > 0) {
-            progress.setProgressPercent((int) ((chapterIndex + 1) * 100 / totalChapters));
+            progress.setScrollPercent((int) ((chapterIndex + 1) * 100 / totalChapters));
+        } else {
+            progress.setScrollPercent(scrollPosition != null ? scrollPosition : 0);
         }
 
+        progress.setUpdateTime(LocalDateTime.now());
         saveOrUpdate(progress);
     }
 

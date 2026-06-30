@@ -46,27 +46,38 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         Tag tag = getOne(new LambdaQueryWrapper<Tag>()
                 .eq(Tag::getId, tagId).eq(Tag::getUserId, userId));
         if (tag == null) throw new RuntimeException("标签不存在");
-        // 删除关联
-        bookTagMapper.delete(new LambdaQueryWrapper<BookTag>().eq(BookTag::getTagId, tagId));
+        // 删除关联（按标签名删除）
+        bookTagMapper.delete(new LambdaQueryWrapper<BookTag>()
+                .eq(BookTag::getTagName, tag.getName())
+                .eq(BookTag::getUserId, userId));
         removeById(tagId);
     }
 
     @Override
     public void addBookTag(Integer userId, Integer bookId, Integer tagId) {
-        // 检查是否已存在
+        Tag tag = getById(tagId);
+        if (tag == null) return;
+
         long count = bookTagMapper.selectCount(new LambdaQueryWrapper<BookTag>()
-                .eq(BookTag::getBookId, bookId).eq(BookTag::getTagId, tagId));
+                .eq(BookTag::getBookId, bookId)
+                .eq(BookTag::getTagName, tag.getName())
+                .eq(BookTag::getUserId, userId));
         if (count > 0) return;
 
         BookTag bt = new BookTag();
+        bt.setUserId(userId);
         bt.setBookId(bookId);
-        bt.setTagId(tagId);
+        bt.setTagName(tag.getName());
         bookTagMapper.insert(bt);
     }
 
     @Override
     public void removeBookTag(Integer userId, Integer bookId, Integer tagId) {
+        Tag tag = getById(tagId);
+        if (tag == null) return;
         bookTagMapper.delete(new LambdaQueryWrapper<BookTag>()
-                .eq(BookTag::getBookId, bookId).eq(BookTag::getTagId, tagId));
+                .eq(BookTag::getBookId, bookId)
+                .eq(BookTag::getTagName, tag.getName())
+                .eq(BookTag::getUserId, userId));
     }
 }

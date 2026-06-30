@@ -11,9 +11,7 @@ import com.moeread.mapper.ReadingStatsMapper;
 import com.moeread.service.ReadingStatsService;
 import org.springframework.stereotype.Service;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -28,17 +26,17 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
 
     @Override
     public void addTodayMinutes(Integer userId, int minutes) {
-        String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        LocalDate today = LocalDate.now();
         ReadingStats stats = getOne(new LambdaQueryWrapper<ReadingStats>()
                 .eq(ReadingStats::getUserId, userId)
-                .eq(ReadingStats::getDate, today));
+                .eq(ReadingStats::getStatDate, today));
         if (stats == null) {
             stats = new ReadingStats();
             stats.setUserId(userId);
-            stats.setDate(today);
-            stats.setMinutes(minutes);
+            stats.setStatDate(today);
+            stats.setReadMinutes(minutes);
         } else {
-            stats.setMinutes(stats.getMinutes() + minutes);
+            stats.setReadMinutes(stats.getReadMinutes() + minutes);
         }
         saveOrUpdate(stats);
     }
@@ -47,14 +45,14 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
     public List<HeatmapPoint> getYearlyHeatmap(Integer userId, int year) {
         List<ReadingStats> stats = list(new LambdaQueryWrapper<ReadingStats>()
                 .eq(ReadingStats::getUserId, userId)
-                .ge(ReadingStats::getDate, year + "-01-01")
-                .le(ReadingStats::getDate, year + "-12-31"));
+                .ge(ReadingStats::getStatDate, LocalDate.of(year, 1, 1))
+                .le(ReadingStats::getStatDate, LocalDate.of(year, 12, 31)));
 
         List<HeatmapPoint> points = new ArrayList<>();
         for (ReadingStats rs : stats) {
             HeatmapPoint p = new HeatmapPoint();
-            p.setDate(rs.getDate());
-            p.setMinutes(rs.getMinutes());
+            p.setDate(rs.getStatDate().toString());
+            p.setMinutes(rs.getReadMinutes());
             points.add(p);
         }
         return points;
@@ -64,18 +62,15 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
     public StatsOverviewVO getOverview(Integer userId) {
         StatsOverviewVO vo = new StatsOverviewVO();
 
-        // 总阅读分钟
         List<ReadingStats> all = list(new LambdaQueryWrapper<ReadingStats>()
                 .eq(ReadingStats::getUserId, userId));
         long totalMinutes = 0;
-        for (ReadingStats rs : all) totalMinutes += rs.getMinutes();
+        for (ReadingStats rs : all) totalMinutes += rs.getReadMinutes();
         vo.setTotalMinutes(totalMinutes);
 
-        // 总书籍数
         vo.setTotalBooks(bookMapper.selectCount(new LambdaQueryWrapper<Book>()
                 .eq(Book::getUserId, userId)));
 
-        // 连续打卡天数
         vo.setStreakDays(calcStreak(all));
 
         return vo;
@@ -83,35 +78,29 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
 
     @Override
     public int[] getWeeklyHabit(Integer userId) {
-        // 统计本周每天阅读分钟
         List<ReadingStats> stats = list(new LambdaQueryWrapper<ReadingStats>()
                 .eq(ReadingStats::getUserId, userId)
-                .ge(ReadingStats::getDate, LocalDate.now().minusWeeks(12).toString()));
+                .ge(ReadingStats::getStatDate, LocalDate.now().minusWeeks(12)));
 
         int[] dailyMinutes = new int[7];
         for (ReadingStats rs : stats) {
-            try {
-                LocalDate d = LocalDate.parse(rs.getDate());
-                int dow = d.getDayOfWeek().getValue() - 1; // Mon=0, Sun=6
-                dailyMinutes[dow] += rs.getMinutes();
-            } catch (Exception ignored) {}
+            int dow = rs.getStatDate().getDayOfWeek().getValue() - 1;
+            dailyMinutes[dow] += rs.getReadMinutes();
         }
         return dailyMinutes;
     }
 
     private long calcStreak(List<ReadingStats> stats) {
         if (stats.isEmpty()) return 0;
-        Set<String> activeDays = new TreeSet<>();
+        List<LocalDate> activeDays = new ArrayList<>();
         for (ReadingStats rs : stats) {
-            if (rs.getMinutes() > 0) activeDays.add(rs.getDate());
+            if (rs.getReadMinutes() > 0) activeDays.add(rs.getStatDate());
         }
-        List<String> sorted = new ArrayList<>(activeDays);
-        Collections.reverse(sorted);
+        activeDays.sort(Collections.reverseOrder());
 
         long streak = 0;
         LocalDate cursor = LocalDate.now();
-        for (String dateStr : sorted) {
-            LocalDate d = LocalDate.parse(dateStr);
+        for (LocalDate d : activeDays) {
             if (d.equals(cursor)) {
                 streak++;
                 cursor = cursor.minusDays(1);
