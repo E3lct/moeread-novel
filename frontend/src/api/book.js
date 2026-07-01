@@ -37,7 +37,7 @@ export function deleteBook(bookId) {
 
 export function uploadCover(file) {
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', file, file.name || 'cover.jpg')
   return request.post('/book/cover', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })

@@ -31,10 +31,16 @@
               </div>
               <div class="form-row">
                 <label class="form-label">头像</label>
-                <div class="avatar-preview" v-if="profile.avatar">
-                  <img :src="profile.avatar" />
+                <div class="avatar-line">
+                  <div class="avatar-preview" v-if="profile.avatar">
+                    <img :src="imageUrl(profile.avatar)" />
+                  </div>
+                  <span class="form-static" v-else>未设置</span>
+                  <label class="btn-upfile">
+                    上传头像
+                    <input type="file" accept="image/*" @change="onAvatarFileSelected" hidden />
+                  </label>
                 </div>
-                <span class="form-static" v-else>未设置</span>
               </div>
               <div class="form-actions">
                 <button class="btn-primary" @click="saveProfile">保存</button>
@@ -222,8 +228,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { getProfile, updateProfile, changePassword as apiChangePassword } from '../api/auth'
-import { getBookshelf, uploadCover } from '../api/book'
+import { getProfile, updateProfile, changePassword as apiChangePassword, uploadUserImage } from '../api/auth'
+import { getBookshelf } from '../api/book'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -251,8 +257,13 @@ const bgSettings = reactive({
 const bgPreviewUrl = computed(() => {
   const img = bgSettings.mascotImage
   if (!img) return ''
-  return img.startsWith('http') ? img : '/api' + img
+  return imageUrl(img)
 })
+
+function imageUrl(img) {
+  if (!img) return ''
+  return img.startsWith('http') || img.startsWith('data:') ? img : '/api' + img
+}
 
 function toggleSection(key) {
   openSection.value = openSection.value === key ? '' : key
@@ -281,6 +292,22 @@ async function saveProfile() {
     showMsg('success', '保存成功')
   } catch (e) {
     showMsg('error', e.message || '保存失败')
+  }
+}
+
+async function onAvatarFileSelected(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  try {
+    const res = await uploadUserImage(file)
+    profile.avatar = res.data.url
+    await updateProfile({ avatar: res.data.url })
+    userStore.updateBgPreview({ avatar: res.data.url })
+    showMsg('success', '头像已更新')
+  } catch (err) {
+    showMsg('error', err.message || '上传失败')
+  } finally {
+    e.target.value = ''
   }
 }
 
@@ -316,7 +343,7 @@ async function onBgFileSelected(e) {
     return
   }
   try {
-    const res = await uploadCover(file)
+    const res = await uploadUserImage(file)
     bgSettings.mascotImage = res.data.url
     userStore.updateBgPreview({ mascotImage: res.data.url })
     await updateProfile({ mascotImage: res.data.url })
@@ -548,6 +575,12 @@ onMounted(async () => {
 }
 
 /* 头像预览 */
+.avatar-line {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 .avatar-preview {
     width: 56px; height: 56px;
     border-radius: 50%;

@@ -9,6 +9,8 @@ public class BookSourceDTO {
     private String sourceKey;
     private String sourceType;
     private String baseUrl;
+    private String searchUrl;
+    private String contentUrlTemplate;
     private String description;
     private String language;
     private Integer enabled;

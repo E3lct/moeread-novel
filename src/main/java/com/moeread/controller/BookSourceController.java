@@ -4,6 +4,7 @@ import com.moeread.common.Result;
 import com.moeread.config.LoginUser;
 import com.moeread.config.RequestContext;
 import com.moeread.dto.BookSourceDTO;
+import com.moeread.dto.SourceBookVO;
 import com.moeread.dto.SourceImportDTO;
 import com.moeread.entity.Book;
 import com.moeread.service.BookSourceService;
@@ -41,6 +42,12 @@ public class BookSourceController {
     }
 
     @LoginUser
+    @PostMapping("/batch")
+    public Result<List<BookSourceDTO>> addBatch(@RequestBody List<BookSourceDTO> sources) {
+        return Result.ok(sourceService.addSources(RequestContext.getUserId(), sources));
+    }
+
+    @LoginUser
     @PostMapping("/preset/{sourceKey}")
     public Result<BookSourceDTO> addPreset(@PathVariable String sourceKey) {
         return Result.ok(sourceService.addPreset(RequestContext.getUserId(), sourceKey));
@@ -64,5 +71,12 @@ public class BookSourceController {
     @PostMapping("/import")
     public Result<Book> importFromSource(@RequestBody SourceImportDTO dto) {
         return Result.ok(sourceService.importFromSource(RequestContext.getUserId(), dto));
+    }
+
+    @LoginUser
+    @GetMapping("/search")
+    public Result<List<SourceBookVO>> search(@RequestParam String keyword,
+                                             @RequestParam(required = false) Integer sourceId) {
+        return Result.ok(sourceService.search(RequestContext.getUserId(), keyword, sourceId));
     }
 }

@@ -2,6 +2,7 @@ package com.moeread.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.moeread.dto.BookSourceDTO;
+import com.moeread.dto.SourceBookVO;
 import com.moeread.dto.SourceImportDTO;
 import com.moeread.entity.Book;
 import com.moeread.entity.BookSource;
@@ -15,6 +16,8 @@ public interface BookSourceService extends IService<BookSource> {
 
     BookSourceDTO addSource(Integer userId, BookSourceDTO dto);
 
+    List<BookSourceDTO> addSources(Integer userId, List<BookSourceDTO> sources);
+
     BookSourceDTO addPreset(Integer userId, String sourceKey);
 
     void updateEnabled(Integer userId, Integer sourceId, boolean enabled);
@@ -22,4 +25,6 @@ public interface BookSourceService extends IService<BookSource> {
     void deleteSource(Integer userId, Integer sourceId);
 
     Book importFromSource(Integer userId, SourceImportDTO dto);
+
+    List<SourceBookVO> search(Integer userId, String keyword, Integer sourceId);
 }

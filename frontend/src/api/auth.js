@@ -19,3 +19,11 @@ export function updateProfile(data) {
 export function changePassword(oldPassword, newPassword) {
   return request.put('/user/password', { oldPassword, newPassword })
 }
+
+export function uploadUserImage(file) {
+  const formData = new FormData()
+  formData.append('file', file, file.name || 'image.jpg')
+  return request.post('/user/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}

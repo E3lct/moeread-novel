@@ -196,7 +196,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     @Override
     public String uploadCover(Integer userId, MultipartFile file) {
         try {
-            Path dir = Paths.get(uploadPath, "covers");
+            Path dir = Paths.get(uploadPath).toAbsolutePath().resolve("covers");
             Files.createDirectories(dir);
             String ext = ".jpg";
             String original = file.getOriginalFilename();

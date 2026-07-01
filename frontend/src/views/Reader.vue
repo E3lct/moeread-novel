@@ -141,7 +141,7 @@ async function loadChapter(index) {
   currentChapterIndex.value = index
   const ch = chapters.value[index]
   try {
-    const res = await getChapterContent(bookId, ch.id)
+    const res = await getChapterContent(ch.id)
     currentChapter.value = res.data || ch
     await nextTick()
     if (contentWrap.value) contentWrap.value.scrollTop = 0
@@ -192,8 +192,8 @@ onMounted(async () => {
     // 恢复进度
     try {
       const progRes = await getProgress(bookId)
-      if (progRes.data && progRes.data.chapterId) {
-        const idx = chapters.value.findIndex(c => c.id === progRes.data.chapterId)
+      if (progRes.data && progRes.data.chapterIndex != null) {
+        const idx = Math.min(Math.max(progRes.data.chapterIndex, 0), chapters.value.length - 1)
         if (idx !== -1) {
           await loadChapter(idx)
           return

@@ -57,20 +57,20 @@ const avatarText = computed(() => {
 .navbar {
     position: fixed;
     top: 18px;
-    left: 18px;
-    bottom: 18px;
-    width: 212px;
-    background: rgba(255, 255, 255, 0.78);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1120px, calc(100vw - 36px));
+    height: 58px;
+    background: rgba(255, 255, 255, 0.74);
     backdrop-filter: blur(22px) saturate(160%);
     -webkit-backdrop-filter: blur(22px) saturate(160%);
     border: 1px solid rgba(232, 226, 214, 0.86);
-    border-radius: 12px;
-    box-shadow: 0 18px 45px rgba(61, 46, 26, 0.10);
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(61, 46, 26, 0.08);
     z-index: 1000;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 14px;
+    padding: 8px 10px;
     gap: 14px;
 }
 
@@ -79,7 +79,7 @@ const avatarText = computed(() => {
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
-    width: 100%;
+    width: auto;
     padding: 8px;
     cursor: pointer;
     transition: background 0.15s;
@@ -122,18 +122,14 @@ const avatarText = computed(() => {
 .navbar-nav {
     flex: 1;
     display: flex;
-    width: 100%;
-    flex-direction: column;
-    justify-content: flex-start;
+    justify-content: center;
     align-items: center;
-    gap: 6px;
-    padding-top: 8px;
+    gap: 4px;
 }
 
 .navbar-item {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 9px 14px;
+    border-radius: 999px;
     font-size: 14px;
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -151,7 +147,7 @@ const avatarText = computed(() => {
     background: #fff4d8;
     color: var(--color-primary-darker);
     font-weight: var(--font-medium);
-    box-shadow: inset 3px 0 0 var(--color-primary);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
 }
 
 .navbar-user {
@@ -159,10 +155,10 @@ const avatarText = computed(() => {
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
-    width: 100%;
+    width: auto;
     cursor: pointer;
     padding: 10px;
-    border-radius: 8px;
+    border-radius: 999px;
     transition: background 0.15s;
     background: rgba(250, 248, 243, 0.78);
 }
@@ -247,3 +243,4 @@ const avatarText = computed(() => {
     }
 }
 </style>
+        transform: none;

@@ -16,6 +16,10 @@ export function addCustomSource(data) {
   return request.post('/source', data)
 }
 
+export function addSourceBatch(data) {
+  return request.post('/source/batch', data)
+}
+
 export function updateSourceEnabled(sourceId, enabled) {
   return request.put(`/source/${sourceId}/enabled`, { enabled })
 }
@@ -26,4 +30,8 @@ export function deleteSource(sourceId) {
 
 export function importFromSource(data) {
   return request.post('/source/import', data)
+}
+
+export function searchSourceBooks(keyword, sourceId = 0) {
+  return request.get('/source/search', { params: { keyword, sourceId: sourceId || undefined } })
 }

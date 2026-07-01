@@ -18,14 +18,14 @@ import TopNav from './TopNav.vue'
 
 .main-content {
     min-height: 100vh;
-    padding: 34px 36px 48px;
-    margin-left: 248px;
+    padding: 96px clamp(18px, 4vw, 56px) 48px;
+    max-width: 1440px;
+    margin: 0 auto;
 }
 
 @media (max-width: 860px) {
     .main-content {
-        margin-left: 0;
-        padding: 84px 16px 32px;
+        padding: 82px 14px 32px;
     }
 }
 </style>

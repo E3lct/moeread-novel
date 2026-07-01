@@ -8,8 +8,16 @@ import com.moeread.dto.LoginVO;
 import com.moeread.dto.RegisterDTO;
 import com.moeread.dto.UserVO;
 import com.moeread.service.UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
 @RestController
@@ -17,6 +25,9 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+
+    @Value("${moeread.upload.path}")
+    private String uploadPath;
 
     public UserController(UserService userService) {
         this.userService = userService;
@@ -67,5 +78,32 @@ public class UserController {
         Integer userId = RequestContext.getUserId();
         userService.changePassword(userId, body.get("oldPassword"), body.get("newPassword"));
         return Result.ok();
+    }
+
+    @LoginUser
+    @PostMapping("/image")
+    public Result<Map<String, String>> uploadImage(@RequestParam("file") MultipartFile file) {
+        Integer userId = RequestContext.getUserId();
+        if (file == null || file.isEmpty()) {
+            return Result.error(400, "图片不能为空");
+        }
+        try {
+            Path dir = Paths.get(uploadPath).toAbsolutePath().resolve("profile");
+            Files.createDirectories(dir);
+            String original = file.getOriginalFilename();
+            String ext = ".jpg";
+            if (original != null && original.contains(".")) {
+                ext = original.substring(original.lastIndexOf("."));
+            }
+            String filename = userId + "_" + System.currentTimeMillis() + ext;
+            try (InputStream input = file.getInputStream()) {
+                Files.copy(input, dir.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return Result.ok(Map.of("url", "/uploads/profile/" + filename));
+        } catch (IOException e) {
+            return Result.error(500, "图片上传失败: " + e.getMessage());
+        } catch (Exception e) {
+            return Result.error(500, "图片上传失败: " + e.getMessage());
+        }
     }
 }
