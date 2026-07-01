@@ -23,7 +23,7 @@ request.interceptors.response.use(
       return res
     }
     // 业务错误
-    alert(res.msg || '请求失败')
+    alert(res.message || '请求失败')
     return Promise.reject(res)
   },
   error => {
@@ -34,7 +34,7 @@ request.interceptors.response.use(
         router.push('/login')
         return Promise.reject(error)
       }
-      const msg = error.response.data?.msg || '网络错误'
+      const msg = error.response.data?.message || '网络错误'
       alert(msg)
     } else {
       alert('网络连接失败')

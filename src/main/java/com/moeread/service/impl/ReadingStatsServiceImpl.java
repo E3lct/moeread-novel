@@ -8,6 +8,7 @@ import com.moeread.entity.Book;
 import com.moeread.entity.ReadingStats;
 import com.moeread.mapper.BookMapper;
 import com.moeread.mapper.ReadingStatsMapper;
+import com.moeread.mapper.UserMapper;
 import com.moeread.service.ReadingStatsService;
 import org.springframework.stereotype.Service;
 
@@ -19,9 +20,11 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
         implements ReadingStatsService {
 
     private final BookMapper bookMapper;
+    private final UserMapper userMapper;
 
-    public ReadingStatsServiceImpl(BookMapper bookMapper) {
+    public ReadingStatsServiceImpl(BookMapper bookMapper, UserMapper userMapper) {
         this.bookMapper = bookMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -72,6 +75,17 @@ public class ReadingStatsServiceImpl extends ServiceImpl<ReadingStatsMapper, Rea
                 .eq(Book::getUserId, userId)));
 
         vo.setStreakDays(calcStreak(all));
+        LocalDate today = LocalDate.now();
+        long todayMinutes = 0;
+        for (ReadingStats rs : all) {
+            if (today.equals(rs.getStatDate())) {
+                todayMinutes = rs.getReadMinutes();
+                break;
+            }
+        }
+        vo.setTodayMinutes(todayMinutes);
+        var user = userMapper.selectById(userId);
+        vo.setDailyGoal(user != null && user.getDailyGoal() != null ? user.getDailyGoal() : 30);
 
         return vo;
     }

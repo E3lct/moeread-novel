@@ -1,631 +1,955 @@
 <template>
-  <div class="page-container bookshelf-page">
-    <!-- 顶部搜索 -->
-    <header class="shelf-header">
-      <h2 class="shelf-title">书架</h2>
-      <div class="search-box">
-        <svg viewBox="0 0 24 24" width="18" height="18" class="search-icon">
-          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
-          <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <div class="bookshelf-page">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div class="page-title">书架</div>
+      <div class="page-subtitle">{{ books.length }} 本书</div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="bookshelf-toolbar">
+      <!-- 搜索 -->
+      <div class="bookshelf-search">
+        <svg class="bookshelf-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <input
-          v-model="keyword"
+          v-model="searchQuery"
           type="text"
           placeholder="搜索书名..."
-          @input="onSearch"
         />
-        <button v-if="keyword" class="clear-btn" @click="keyword = ''; onSearch()">
-          <svg viewBox="0 0 24 24" width="16" height="16">
-            <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/>
-            <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <button v-if="searchQuery" class="bookshelf-search-clear" @click="searchQuery = ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
-    </header>
 
-    <!-- 视图切换 + 标签筛选 -->
-    <div class="filter-bar">
-      <div class="view-toggle">
-        <button :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">网格</button>
-        <button :class="{ active: viewMode === 'group' }" @click="viewMode = 'group'">分组</button>
+      <!-- 右侧操作 -->
+      <div class="bookshelf-toolbar-right">
+        <!-- 视图切换 -->
+        <div class="view-switcher">
+          <button class="view-switcher-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'" title="网格视图">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v8H3V3m10 0h8v8h-8V3M3 13h8v8H3v-8m10 0h8v8h-8v-8z"/></svg>
+          </button>
+          <button class="view-switcher-btn" :class="{ active: viewMode === 'grouped' }" @click="viewMode = 'grouped'" title="分组视图">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h18v4H3V3m0 7h18v4H3v-4m0 7h18v4H3v-4z"/></svg>
+          </button>
+        </div>
+
+        <!-- 导入按钮 -->
+        <router-link to="/import" class="bookshelf-import-btn">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          导入
+        </router-link>
       </div>
     </div>
 
-    <!-- 标签栏 -->
-    <div class="tag-bar">
-      <button
-        class="tag-chip"
-        :class="{ active: activeTag === 'all' }"
-        @click="activeTag = 'all'"
-      >全部</button>
-      <button
-        v-for="tag in systemTags"
-        :key="tag.value"
-        class="tag-chip"
-        :class="{ active: activeTag === tag.value }"
-        @click="activeTag = tag.value"
-      >{{ tag.label }}</button>
+    <!-- 筛选标签 -->
+    <div class="bookshelf-filters">
+      <div
+        class="filter-tab"
+        :class="{ active: filter === 'all' }"
+        @click="filter = 'all'"
+      >
+        全部 <span class="filter-count">{{ books.length }}</span>
+      </div>
+      <div
+        class="filter-tab"
+        :class="{ active: filter === 'reading' }"
+        @click="filter = 'reading'"
+      >
+        正在看 <span class="filter-count">{{ readingCount }}</span>
+      </div>
+      <div
+        class="filter-tab"
+        :class="{ active: filter === 'prepare' }"
+        @click="filter = 'prepare'"
+      >
+        准备看 <span class="filter-count">{{ prepareCount }}</span>
+      </div>
+      <div
+        class="filter-tab"
+        :class="{ active: filter === 'finished' }"
+        @click="filter = 'finished'"
+      >
+        已看完 <span class="filter-count">{{ finishedCount }}</span>
+      </div>
+      <div
+        class="filter-tab"
+        :class="{ active: filter === 'favored' }"
+        @click="filter = 'favored'"
+      >
+        喜欢 <span class="filter-count">{{ favoredCount }}</span>
+      </div>
     </div>
 
     <!-- 网格视图 -->
-    <div v-if="viewMode === 'grid'" class="book-grid">
-      <div
+    <div class="book-grid" v-if="viewMode === 'grid' && filteredBooks.length">
+      <BookCard
         v-for="book in filteredBooks"
         :key="book.id"
-        class="grid-item"
-        @click="openReader(book)"
-        @contextmenu.prevent="openEdit(book)"
-      >
-        <BookCard :book="book" />
-        <button class="edit-btn" @click.stop="openEdit(book)">
-          <svg viewBox="0 0 24 24" width="14" height="14">
-            <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
+        :book="book"
+        @edit="openEditModal"
+        @toggle-favorite="toggleFavorite"
+      />
     </div>
 
     <!-- 分组视图 -->
-    <div v-else class="group-view">
-      <div v-for="group in groupedBooks" :key="group.label" class="group-section" v-show="group.books.length">
-        <h3 class="group-title">{{ group.label }} ({{ group.books.length }})</h3>
+    <div class="grouped-view" v-if="viewMode === 'grouped' && filteredBooks.length">
+      <div class="tag-group" v-for="group in groupedBooks" :key="group.tag">
+        <div class="tag-group-header">
+          <span class="tag-group-name">{{ group.tag }}</span>
+          <span class="tag-group-count">{{ group.books.length }} 本</span>
+        </div>
         <div class="book-grid">
-          <div
+          <BookCard
             v-for="book in group.books"
             :key="book.id"
-            class="grid-item"
-            @click="openReader(book)"
-          >
-            <BookCard :book="book" />
-          </div>
+            :book="book"
+            @edit="openEditModal"
+            @toggle-favorite="toggleFavorite"
+          />
         </div>
       </div>
     </div>
 
     <!-- 空状态 -->
-    <div v-if="!loading && filteredBooks.length === 0" class="empty-state">
-      <div class="empty-icon">
-        <svg viewBox="0 0 64 64" width="64" height="64">
-          <rect x="12" y="10" width="40" height="48" rx="4" fill="none" stroke="#FDE68A" stroke-width="2.5"/>
-          <line x1="22" y1="22" x2="42" y2="22" stroke="#FDE68A" stroke-width="2" stroke-linecap="round"/>
-          <line x1="22" y1="32" x2="42" y2="32" stroke="#FDE68A" stroke-width="2" stroke-linecap="round"/>
-          <line x1="22" y1="42" x2="36" y2="42" stroke="#FDE68A" stroke-width="2" stroke-linecap="round"/>
-        </svg>
+    <div class="empty-state" v-if="!filteredBooks.length">
+      <div class="empty-state-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
       </div>
-      <p class="empty-text">还没有书籍</p>
-      <button class="btn-primary empty-btn" @click="router.push('/import')">去导入</button>
+      <div class="empty-state-title" v-if="books.length">没有符合条件的书籍</div>
+      <div class="empty-state-desc" v-if="books.length">试试其他筛选条件</div>
+      <template v-if="!books.length">
+        <div class="empty-state-title">书架还是空的</div>
+        <div class="empty-state-desc">导入一本小说开始阅读吧</div>
+        <router-link to="/import" class="btn btn-primary">导入书籍</router-link>
+      </template>
     </div>
 
     <!-- 编辑弹窗 -->
-    <transition name="fade">
-      <div v-if="editDialog" class="modal-mask" @click="editDialog = false">
-        <div class="modal-content" @click.stop>
-          <h3 class="modal-title">编辑书籍</h3>
-
-          <!-- 封面上传 -->
-          <div class="cover-upload" @click="triggerCoverUpload">
-            <img v-if="editingBook.coverImagePath" :src="coverUrl(editingBook)" class="upload-preview" />
-            <div v-else class="upload-placeholder">
-              <svg viewBox="0 0 24 24" width="28" height="28">
-                <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
-                <path d="M21 15l-5-5L5 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>上传封面</span>
-            </div>
-            <input ref="coverInput" type="file" accept="image/*" hidden @change="handleCoverUpload" />
+    <div class="modal-overlay" :class="{ open: editModal.open }" @click.self="editModal.open = false">
+      <div class="modal-card" v-if="editModal.book">
+        <div class="modal-header">
+          <span class="modal-title">编辑书籍</span>
+          <button class="modal-close" @click="editModal.open = false">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">书名</label>
+            <input class="form-input" v-model="editModal.book.title" />
           </div>
-
-          <div class="input-group">
-            <label>书名</label>
-            <input v-model="editingBook.title" type="text" placeholder="书名" />
-          </div>
-
-          <div class="input-group">
-            <label>作者</label>
-            <input v-model="editingBook.author" type="text" placeholder="作者" />
-          </div>
-
-          <div class="input-group">
-            <label>简介</label>
-            <textarea v-model="editingBook.description" rows="3" placeholder="简介"></textarea>
-          </div>
-
-          <!-- 状态选择 -->
-          <div class="input-group">
-            <label>阅读状态</label>
-            <div class="status-row">
-              <button
-                v-for="s in statusOptions"
-                :key="s.value"
-                class="status-chip"
-                :class="{ active: editingBook.status === s.value }"
-                @click="editingBook.status = s.value"
-              >{{ s.label }}</button>
+          <div class="form-row">
+            <label class="form-label">封面</label>
+            <div class="cover-edit-area">
+              <div class="cover-preview" :class="coverPreviewClass" :style="coverPreviewStyle">
+                <span v-if="!editModal.book.coverImagePath" class="cover-preview-title">{{ editModal.book.title }}</span>
+              </div>
+              <div class="cover-edit-actions">
+                <label class="btn-upfile">
+                  上传封面
+                  <input type="file" accept="image/*" @change="onCoverFileSelected" hidden />
+                </label>
+                <button class="btn-danger-ghost-sm" v-if="editModal.book.coverImagePath" @click="removeCover">移除封面</button>
+              </div>
+              <div class="cover-color-picker">
+                <span class="cover-color-label">封面色</span>
+                <button
+                  v-for="c in COVER_COLORS"
+                  :key="c"
+                  class="cover-color-swatch"
+                  :class="{ active: editModal.book.coverColor === c && !editModal.book.coverImagePath }"
+                  :style="{ background: c }"
+                  @click="selectCoverColor(c)"
+                ></button>
+              </div>
             </div>
           </div>
-
-          <div class="modal-actions">
-            <button class="btn-cancel" @click="editDialog = false">取消</button>
-            <button class="btn-danger" @click="handleDelete">删除</button>
-            <button class="btn-save" @click="handleSave">保存</button>
+          <div class="form-row">
+            <label class="form-label">阅读状态</label>
+            <select class="form-input" v-model="editModal.book.status">
+              <option value="prepare">准备看</option>
+              <option value="reading">正在看</option>
+              <option value="finished">已看完</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">标签</label>
+            <div class="tag-editor">
+              <div class="tag-list">
+                <span class="tag-chip" v-for="(tag, i) in editModal.book.tags" :key="i">
+                  {{ tag }}
+                  <button class="tag-chip-remove" @click="editModal.book.tags.splice(i, 1)">x</button>
+                </span>
+              </div>
+              <div class="tag-input-wrap">
+                <input class="form-input tag-input" v-model="editModal.newTag" placeholder="输入标签名" @keyup.enter="addTag" />
+                <button class="tag-add-btn" @click="addTag">添加</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row form-row-danger">
+            <button class="btn btn-danger-ghost" @click="deleteBook">删除书籍</button>
           </div>
         </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="editModal.open = false">取消</button>
+          <button class="btn btn-primary" @click="saveEdit">保存</button>
+        </div>
       </div>
-    </transition>
+    </div>
+
+    <!-- 裁剪弹窗 -->
+    <CropModal
+      :show="cropModal.show"
+      :imageSrc="cropModal.imageSrc"
+      @close="cropModal.show = false"
+      @crop="onCropComplete"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getBookList, searchBooks, updateBook, deleteBook, uploadCover } from '../api/book'
+import { getBookshelf, updateBook, deleteBook as apiDeleteBook, uploadCover } from '../api/book'
 import BookCard from '../components/BookCard.vue'
+import CropModal from '../components/CropModal.vue'
 
-const router = useRouter()
-
-const loading = ref(true)
 const books = ref([])
-const keyword = ref('')
+const searchQuery = ref('')
 const viewMode = ref('grid')
-const activeTag = ref('all')
+const filter = ref('all')
 
-const systemTags = [
-  { label: '喜欢', value: 'favorite' },
-  { label: '正在看', value: 'reading' },
-  { label: '准备看', value: 'pending' },
-  { label: '已看完', value: 'finished' }
-]
+const editModal = ref({
+  open: false,
+  book: null,
+  newTag: ''
+})
 
-const statusOptions = [
-  { label: '准备看', value: 'pending' },
-  { label: '正在看', value: 'reading' },
-  { label: '已看完', value: 'finished' }
-]
-
-// 编辑弹窗
-const editDialog = ref(false)
-const editingBook = ref({})
-const coverInput = ref(null)
+const COVER_COLORS = ['#F59E0B', '#D97706', '#B45309', '#FBBF24', '#92400E', '#78350F']
+const cropModal = ref({ show: false, imageSrc: '' })
 
 const filteredBooks = computed(() => {
   let result = books.value
-  if (activeTag.value === 'favorite') {
-    result = result.filter(b => b.isFavorite)
-  } else if (activeTag.value !== 'all') {
-    result = result.filter(b => b.status === activeTag.value)
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(b => b.title.toLowerCase().includes(q))
   }
+  if (filter.value === 'reading') result = result.filter(b => b.status === 'reading')
+  else if (filter.value === 'prepare') result = result.filter(b => b.status === 'prepare')
+  else if (filter.value === 'finished') result = result.filter(b => b.status === 'finished')
+  else if (filter.value === 'favored') result = result.filter(b => Number(b.isFavorite) === 1)
   return result
 })
 
+const readingCount = computed(() => books.value.filter(b => b.status === 'reading').length)
+const prepareCount = computed(() => books.value.filter(b => b.status === 'prepare').length)
+const finishedCount = computed(() => books.value.filter(b => b.status === 'finished').length)
+const favoredCount = computed(() => books.value.filter(b => Number(b.isFavorite) === 1).length)
+
 const groupedBooks = computed(() => {
-  const groups = [
-    { label: '正在看', books: [] },
-    { label: '准备看', books: [] },
-    { label: '已看完', books: [] },
-    { label: '其他', books: [] }
-  ]
-  books.value.forEach(b => {
-    if (b.status === 'reading') groups[0].books.push(b)
-    else if (b.status === 'pending') groups[1].books.push(b)
-    else if (b.status === 'finished') groups[2].books.push(b)
-    else groups[3].books.push(b)
+  const groups = {}
+  filteredBooks.value.forEach(book => {
+    if (book.tags && book.tags.length) {
+      book.tags.forEach(tag => {
+        if (!groups[tag]) groups[tag] = []
+        groups[tag].push(book)
+      })
+    } else {
+      const key = '未分组'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(book)
+    }
   })
-  return groups
+  return Object.entries(groups).map(([tag, books]) => ({ tag, books }))
 })
 
-function coverUrl(book) {
-  if (!book.coverImagePath) return ''
-  const path = book.coverImagePath
-  if (path.startsWith('http')) return path
-  return '/api' + path
+const coverPreviewClass = computed(() => {
+  if (!editModal.value.book) return ''
+  if (editModal.value.book.coverImagePath) return ''
+  if (editModal.value.book.coverColor) return ''
+  return `cover-${(editModal.value.book.id % 6) + 1}`
+})
+
+const coverPreviewStyle = computed(() => {
+  if (!editModal.value.book) return {}
+  if (editModal.value.book.coverImagePath) {
+    const url = editModal.value.book.coverImagePath.startsWith('http')
+      ? editModal.value.book.coverImagePath
+      : '/api' + editModal.value.book.coverImagePath
+    return { background: `url(${url}) center/cover` }
+  }
+  if (editModal.value.book.coverColor) {
+    return { background: editModal.value.book.coverColor }
+  }
+  return {}
+})
+
+function openEditModal(book) {
+  editModal.value = {
+    open: true,
+    book: { ...book, tags: [...(book.tags || [])] },
+    newTag: ''
+  }
 }
 
-function openReader(book) {
-  router.push(`/reader/${book.id}`)
-}
-
-function openEdit(book) {
-  editingBook.value = { ...book }
-  editDialog.value = true
-}
-
-function triggerCoverUpload() {
-  coverInput.value?.click()
-}
-
-async function handleCoverUpload(e) {
+function onCoverFileSelected(e) {
   const file = e.target.files[0]
   if (!file) return
-  try {
-    const res = await uploadCover(file)
-    editingBook.value.coverImagePath = res.data.path
-  } catch (err) {
-    // 错误已处理
+  if (file.size > 5 * 1024 * 1024) {
+    alert('图片大小不能超过5MB')
+    return
   }
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    cropModal.value = { show: true, imageSrc: ev.target.result }
+  }
+  reader.readAsDataURL(file)
   e.target.value = ''
 }
 
-async function handleSave() {
+async function onCropComplete(blob) {
   try {
-    await updateBook(editingBook.value.id, {
-      title: editingBook.value.title,
-      author: editingBook.value.author,
-      description: editingBook.value.description,
-      coverImagePath: editingBook.value.coverImagePath,
-      status: editingBook.value.status,
-      isFavorite: editingBook.value.isFavorite
-    })
-    // 更新本地数据
-    const idx = books.value.findIndex(b => b.id === editingBook.value.id)
-    if (idx > -1) books.value[idx] = { ...editingBook.value }
-    editDialog.value = false
-  } catch (err) {
-    // 错误已处理
+    const res = await uploadCover(blob)
+    editModal.value.book.coverImagePath = res.data.url
+    editModal.value.book.coverColor = ''
+  } catch (e) {
+    alert('封面上传失败: ' + (e.message || ''))
   }
 }
 
-async function handleDelete() {
+function selectCoverColor(color) {
+  editModal.value.book.coverImagePath = ''
+  editModal.value.book.coverColor = color
+}
+
+function removeCover() {
+  editModal.value.book.coverImagePath = ''
+  editModal.value.book.coverColor = ''
+}
+
+function addTag() {
+  const tag = editModal.value.newTag.trim()
+  if (tag && !editModal.value.book.tags.includes(tag)) {
+    editModal.value.book.tags.push(tag)
+  }
+  editModal.value.newTag = ''
+}
+
+async function saveEdit() {
+  try {
+    await updateBook(editModal.value.book.id, {
+      title: editModal.value.book.title,
+      status: editModal.value.book.status,
+      tags: editModal.value.book.tags,
+      coverImagePath: editModal.value.book.coverImagePath || '',
+      coverColor: editModal.value.book.coverColor || ''
+    })
+    const idx = books.value.findIndex(b => b.id === editModal.value.book.id)
+    if (idx !== -1) {
+      books.value[idx] = { ...books.value[idx], ...editModal.value.book }
+    }
+    editModal.value.open = false
+  } catch (e) {
+    alert('保存失败: ' + (e.message || ''))
+  }
+}
+
+async function deleteBook() {
   if (!confirm('确定删除这本书吗？')) return
   try {
-    await deleteBook(editingBook.value.id)
-    books.value = books.value.filter(b => b.id !== editingBook.value.id)
-    editDialog.value = false
-  } catch (err) {
-    // 错误已处理
+    await apiDeleteBook(editModal.value.book.id)
+    books.value = books.value.filter(b => b.id !== editModal.value.book.id)
+    editModal.value.open = false
+  } catch (e) {
+    alert('删除失败: ' + (e.message || ''))
   }
 }
 
-let searchTimer = null
-function onSearch() {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(async () => {
-    if (!keyword.value.trim()) {
-      await loadBooks()
-    } else {
-      try {
-        const res = await searchBooks(keyword.value.trim())
-        books.value = res.data || []
-      } catch (e) {}
-    }
-  }, 300)
-}
-
-async function loadBooks() {
-  loading.value = true
+async function toggleFavorite(book) {
   try {
-    const res = await getBookList()
-    books.value = res.data || []
-  } catch (e) {} finally {
-    loading.value = false
+    const next = Number(book.isFavorite) === 1 ? 0 : 1
+    await updateBook(book.id, { isFavorite: next })
+    book.isFavorite = next
+  } catch (e) {
+    console.error('切换收藏失败:', e)
   }
 }
 
-onMounted(loadBooks)
+onMounted(async () => {
+  try {
+    const res = await getBookshelf()
+    books.value = res.data || []
+  } catch (e) {
+    console.error('加载书架失败:', e)
+  }
+})
 </script>
 
 <style scoped>
 .bookshelf-page {
-  padding: 16px 16px 0;
+    min-height: calc(100vh - var(--nav-height));
+    padding-bottom: 48px;
+    max-width: var(--content-max-width);
+    margin: 0 auto;
 }
 
-/* 头部 */
-.shelf-header {
-  padding: 12px 4px 16px;
+/* 工具栏 */
+.bookshelf-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
 }
 
-.shelf-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--color-text);
-  margin-bottom: 14px;
+.bookshelf-search {
+    flex: 1;
+    max-width: 380px;
+    position: relative;
 }
 
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 10px 14px;
-  box-shadow: var(--shadow-soft);
+.bookshelf-search input {
+    width: 100%;
+    padding: 8px 32px 8px 34px;
+    border: 1px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    background: var(--color-bg-card);
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
-.search-icon {
-  color: var(--color-text-hint);
-  flex-shrink: 0;
+.bookshelf-search input::placeholder {
+    color: var(--color-text-light);
 }
 
-.search-box input {
-  flex: 1;
-  font-size: 14px;
-  color: var(--color-text);
+.bookshelf-search input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+    background: #fff;
 }
 
-.clear-btn {
-  color: var(--color-text-hint);
-  display: flex;
-  cursor: pointer;
+.bookshelf-search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+    z-index: 1;
 }
 
-/* 视图切换 */
-.filter-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+.bookshelf-search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border: 0;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 50%;
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
 }
 
-.view-toggle {
-  display: flex;
-  background: #fff;
-  border-radius: 8px;
-  padding: 3px;
-  box-shadow: var(--shadow-soft);
+.bookshelf-search-clear:hover {
+    background: rgba(0, 0, 0, 0.16);
+    color: var(--color-text);
 }
 
-.view-toggle button {
-  padding: 6px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-hint);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+.bookshelf-search-clear svg {
+    width: 10px;
+    height: 10px;
 }
 
-.view-toggle button.active {
-  background: var(--color-primary);
-  color: #fff;
-  font-weight: 600;
+.bookshelf-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
-/* 标签栏 */
-.tag-bar {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 12px;
+.view-switcher {
+    display: inline-flex;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    padding: 2px;
 }
 
-.tag-chip {
-  flex-shrink: 0;
-  padding: 6px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  background: #fff;
-  border-radius: 20px;
-  box-shadow: var(--shadow-soft);
-  cursor: pointer;
-  transition: all 0.2s;
+.view-switcher-btn {
+    width: 30px;
+    height: 26px;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.12s, color 0.12s;
 }
 
-.tag-chip.active {
-  background: var(--color-primary);
-  color: #fff;
-  font-weight: 600;
+.view-switcher-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
-/* 网格 */
+.view-switcher-btn:hover {
+    color: var(--color-text);
+}
+
+.view-switcher-btn.active {
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+}
+
+.bookshelf-import-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px 7px 12px;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-medium);
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(217, 119, 6, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: background 0.15s, transform 0.08s, box-shadow 0.15s;
+}
+
+.bookshelf-import-btn:hover {
+    background: var(--color-primary-dark);
+    color: #fff;
+}
+
+.bookshelf-import-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+/* 筛选标签 */
+.bookshelf-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--color-divider);
+    flex-wrap: wrap;
+}
+
+.filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background 0.1s;
+    white-space: nowrap;
+}
+
+.filter-tab:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--color-text);
+}
+
+.filter-tab.active {
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    font-weight: var(--font-medium);
+}
+
+.filter-count {
+    font-size: var(--font-size-xs);
+    padding: 1px 6px;
+    border-radius: var(--radius-pill);
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-text-tertiary);
+}
+
+.filter-tab.active .filter-count {
+    background: rgba(217, 119, 6, 0.15);
+    color: var(--color-primary-darker);
+}
+
+/* 书籍网格 */
 .book-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  padding: 4px 4px 16px;
-}
-
-.grid-item {
-  position: relative;
-}
-
-.edit-btn {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 26px;
-  height: 26px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(4px);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  z-index: 5;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.grid-item:hover .edit-btn,
-.grid-item:active .edit-btn {
-  opacity: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+    gap: 22px;
 }
 
 /* 分组视图 */
-.group-section {
-  margin-bottom: 20px;
+.grouped-view {
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
 }
 
-.group-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  padding: 8px 4px;
+.tag-group-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-divider);
+}
+
+.tag-group-name {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+}
+
+.tag-group-count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
 }
 
 /* 空状态 */
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60px 0;
+    text-align: center;
+    padding: 80px 24px;
 }
 
-.empty-icon {
-  margin-bottom: 16px;
-  opacity: 0.6;
+.empty-state-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 20px;
+    background: var(--color-primary-pale);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary-darker);
 }
 
-.empty-text {
-  color: var(--color-text-hint);
-  font-size: 14px;
-  margin-bottom: 20px;
+.empty-state-icon svg {
+    width: 26px;
+    height: 26px;
 }
 
-.empty-btn {
-  max-width: 200px;
+.empty-state-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-medium);
+    color: var(--color-text);
+    margin-bottom: 8px;
 }
 
-/* 编辑弹窗 */
-.modal-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(61, 46, 26, 0.5);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 200;
+.empty-state-desc {
+    font-size: var(--font-size-base);
+    color: var(--color-text-tertiary);
+    margin-bottom: 20px;
 }
 
-.modal-content {
-  width: 100%;
-  max-width: 480px;
-  background: #fff;
-  border-radius: 24px 24px 0 0;
-  padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
-  max-height: 85vh;
-  overflow-y: auto;
+/* 模态弹窗 */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s;
+}
+
+.modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-card {
+    width: 460px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 64px);
+    overflow: auto;
+    background: #fff;
+    border-radius: var(--radius-xl);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.18s;
+}
+
+.modal-overlay.open .modal-card {
+    transform: translateY(0) scale(1);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--color-divider);
 }
 
 .modal-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 20px;
-  text-align: center;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
 }
 
-.cover-upload {
-  width: 100px;
-  height: 134px;
-  margin: 0 auto 20px;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 2px dashed var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: var(--color-primary-lightest);
+.modal-close {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    background: transparent;
+    border-radius: 50%;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.12s, color 0.12s;
 }
 
-.upload-preview {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.modal-close:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-text);
 }
 
-.upload-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text-hint);
-  font-size: 12px;
+.modal-close svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
-.input-group {
-  margin-bottom: 16px;
+.modal-body {
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.input-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 6px;
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.input-group input,
-.input-group textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--color-text);
-  background: var(--color-primary-lightest);
-  resize: none;
+.form-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    color: var(--color-text-secondary);
 }
 
-.input-group input:focus,
-.input-group textarea:focus {
-  border-color: var(--color-primary);
-  background: #fff;
+.form-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    background: #fff;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.status-row {
-  display: flex;
-  gap: 8px;
+.form-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
 }
 
-.status-chip {
-  flex: 1;
-  padding: 8px 0;
-  font-size: 13px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  background: #fff;
-  transition: all 0.2s;
+/* 标签编辑器 */
+.tag-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.status-chip.active {
-  background: var(--color-primary-lightest);
-  border-color: var(--color-primary);
-  color: var(--color-primary-darker);
-  font-weight: 600;
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 28px;
 }
 
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 24px;
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px 3px 10px;
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-sm);
 }
 
-.btn-cancel, .btn-danger, .btn-save {
-  flex: 1;
-  padding: 12px 0;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
+.tag-chip-remove {
+    width: 18px;
+    height: 18px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.6;
+    transition: opacity 0.12s, background 0.12s;
 }
 
-.btn-cancel {
-  background: var(--color-primary-lightest);
-  color: var(--color-text-secondary);
+.tag-chip-remove:hover {
+    opacity: 1;
+    background: rgba(217, 119, 6, 0.18);
 }
 
-.btn-danger {
-  background: #FEE2E2;
-  color: #DC2626;
+.tag-input-wrap {
+    display: flex;
+    gap: 8px;
 }
 
-.btn-save {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: #fff;
+.tag-input {
+    flex: 1;
 }
 
-.btn-cancel:active, .btn-danger:active, .btn-save:active {
-  opacity: 0.85;
+.tag-add-btn {
+    padding: 8px 14px;
+    border: 1px solid var(--color-border-neutral);
+    background: #fff;
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.tag-add-btn:hover {
+    background: var(--color-primary-pale);
+    border-color: var(--color-primary);
+    color: var(--color-primary-darker);
+}
+
+.form-row-danger {
+    flex-direction: row;
+    padding-top: 4px;
+    border-top: 1px solid var(--color-divider);
+    margin-top: 4px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 22px 18px;
+    border-top: 1px solid var(--color-divider);
+}
+
+/* 封面编辑 */
+.cover-edit-area {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.cover-preview {
+    width: 90px;
+    height: 120px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.cover-preview-title {
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.3;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    word-break: break-all;
+}
+.cover-edit-actions {
+    display: flex;
+    gap: 8px;
+}
+.cover-color-picker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cover-color-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
+.cover-color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: border-color 0.15s, transform 0.1s;
+}
+.cover-color-swatch:hover {
+    transform: scale(1.1);
+}
+.cover-color-swatch.active {
+    border-color: var(--color-text);
+}
+.btn-upfile {
+    display: inline-block;
+    padding: 6px 14px;
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    text-align: center;
+    font-family: inherit;
+}
+.btn-upfile:hover {
+    background: #FEF3C7;
+    border-color: var(--color-primary);
+}
+.btn-danger-ghost-sm {
+    padding: 6px 14px;
+    background: transparent;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+.btn-danger-ghost-sm:hover {
+    background: #FEF2F2;
 }
 </style>

@@ -1,505 +1,622 @@
 <template>
-  <div class="page-container stats-page">
-    <header class="stats-header">
-      <h2>阅读统计</h2>
-      <p class="year-label">{{ currentYear }} 年</p>
-    </header>
+  <div class="stats-page">
+    <div class="stats-content">
+      <!-- 页头 -->
+      <div class="page-header">
+        <div class="page-title">阅读统计</div>
+        <div class="page-subtitle">坚持阅读，每天都有进步</div>
+      </div>
 
-    <!-- 概览带 -->
-    <section class="overview-band">
-      <div class="overview-item">
-        <span class="overview-num">{{ formatNumber(overview.totalMinutes) }}</span>
-        <span class="overview-label">总时长(分)</span>
-      </div>
-      <div class="overview-divider"></div>
-      <div class="overview-item">
-        <span class="overview-num">{{ overview.totalBooks }}</span>
-        <span class="overview-label">书籍数</span>
-      </div>
-      <div class="overview-divider"></div>
-      <div class="overview-item">
-        <span class="overview-num">{{ overview.streakDays }}</span>
-        <span class="overview-label">连续打卡</span>
-      </div>
-    </section>
-
-    <!-- 年度热力图 -->
-    <section class="section">
-      <h3 class="section-title">年度热力图</h3>
-      <div class="heatmap-wrap card">
-        <!-- 月份标签 -->
-        <div class="heatmap-months">
-          <span
-            v-for="m in 12"
-            :key="m"
-            class="month-label"
-            :style="{ gridColumn: monthColStart(m) }"
-          >{{ m }}月</span>
+      <!-- 概览带 -->
+      <div class="overview-band">
+        <div class="ov-item">
+          <div class="ov-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+          </div>
+          <div>
+            <span class="ov-num">{{ overview.totalMinutesText || '0分钟' }}</span>
+          </div>
+          <div class="ov-label">总阅读时长</div>
         </div>
-        <!-- 热力图网格 -->
-        <div class="heatmap-grid">
-          <div class="weekday-labels">
-            <span v-for="d in ['一','三','五','日']" :key="d" class="weekday-label">{{ d }}</span>
+        <div class="ov-divider"></div>
+        <div class="ov-item">
+          <div class="ov-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
           </div>
-          <div class="heatmap-cells" ref="heatmapRef">
-            <div
-              v-for="(day, i) in heatmapData"
-              :key="i"
-              class="heatmap-cell"
-              :class="heatLevel(day.minutes)"
-              :title="`${day.date} - ${day.minutes}分钟`"
-            ></div>
+          <div>
+            <span class="ov-num">{{ overview.totalBooks || 0 }}</span>
+            <span class="ov-unit">本</span>
           </div>
+          <div class="ov-label">书籍总数</div>
         </div>
-        <!-- 图例 -->
-        <div class="heatmap-legend">
-          <span class="legend-text">少</span>
-          <div class="legend-cells">
-            <div class="heatmap-cell level-0"></div>
-            <div class="heatmap-cell level-1"></div>
-            <div class="heatmap-cell level-2"></div>
-            <div class="heatmap-cell level-3"></div>
-            <div class="heatmap-cell level-4"></div>
+        <div class="ov-divider"></div>
+        <div class="ov-item">
+          <div class="ov-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
           </div>
-          <span class="legend-text">多</span>
+          <div>
+            <span class="ov-num">{{ overview.streak || 0 }}</span>
+            <span class="ov-unit">天</span>
+          </div>
+          <div class="ov-label">连续打卡</div>
         </div>
       </div>
-    </section>
 
-    <!-- 阅读习惯 -->
-    <section class="section">
-      <h3 class="section-title">阅读习惯</h3>
-      <div class="habit-wrap card">
-        <div class="habit-chart">
-          <div
-            v-for="(val, i) in habitData"
-            :key="i"
-            class="habit-bar-wrap"
-          >
-            <div class="habit-bar-area">
-              <div
-                class="habit-bar"
-                :style="{ height: barHeight(val) + '%' }"
-              >
-                <span class="habit-val" v-if="val > 0">{{ val }}</span>
+      <!-- 热力图 + 阅读习惯 -->
+      <div class="heatmap-row">
+        <!-- 热力图 -->
+        <div class="heatmap-card">
+          <div class="sec-head">
+            <span class="sec-title">年度热力图</span>
+            <span class="sec-hint">{{ currentYear }}年</span>
+          </div>
+          <div class="heatmap-scroll">
+            <div class="heatmap-inner" :style="{ width: heatmapWidth + 'px' }">
+              <!-- 月份标签 -->
+              <div class="hm-months-row">
+                <div class="hm-dow-spacer" :style="{ width: '24px' }"></div>
+                <div class="hm-months" :style="{ position: 'relative', height: '16px' }">
+                  <span
+                    v-for="m in months"
+                    :key="m.month"
+                    class="hm-month"
+                    :style="{ left: m.offset + 'px' }"
+                  >{{ m.label }}</span>
+                </div>
+              </div>
+              <!-- 主体 -->
+              <div class="hm-body-row">
+                <!-- 星期 -->
+                <div class="hm-dow-col">
+                  <div class="hm-dow-label"></div>
+                  <div class="hm-dow-label">一</div>
+                  <div class="hm-dow-label"></div>
+                  <div class="hm-dow-label">三</div>
+                  <div class="hm-dow-label"></div>
+                  <div class="hm-dow-label">五</div>
+                  <div class="hm-dow-label"></div>
+                </div>
+                <!-- 周列 -->
+                <div class="hm-weeks">
+                  <div class="hm-week" v-for="(week, wi) in heatmapWeeks" :key="wi">
+                    <div
+                      v-for="(day, di) in week"
+                      :key="di"
+                      class="heat-cell"
+                      :class="day ? `heat-${heatLevel(day.minutes)}` : 'heat-empty'"
+                      :title="day ? `${day.date}: ${day.minutes}分钟` : ''"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              <!-- 图例 -->
+              <div class="hm-legend">
+                <span>少</span>
+                <div class="heat-cell heat-0"></div>
+                <div class="heat-cell heat-1"></div>
+                <div class="heat-cell heat-2"></div>
+                <div class="heat-cell heat-3"></div>
+                <div class="heat-cell heat-4"></div>
+                <span>多</span>
               </div>
             </div>
-            <span class="habit-label">{{ weekdayLabels[i] }}</span>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- 已读完列表 -->
-    <section class="section">
-      <h3 class="section-title">已读完 ({{ finishedBooks.length }})</h3>
-      <div class="finished-list">
-        <div
-          v-for="book in finishedBooks"
-          :key="book.id"
-          class="finished-item card"
-          @click="openReader(book.id)"
-        >
-          <div class="finished-cover" :style="coverStyle(book)">
-            <img v-if="book.coverImagePath" :src="coverUrl(book)" class="cover-img" />
-            <span v-else class="cover-text">{{ book.title }}</span>
+        <!-- 阅读习惯 -->
+        <div class="habit-card">
+          <div class="habit-title">阅读习惯</div>
+          <div class="habit-stats">
+            <div class="habit-stat">
+              <span class="habit-stat-num">{{ habit.avgPerDay || 0 }}</span>
+              <span class="habit-stat-label">日均(分)</span>
+            </div>
+            <div class="habit-stat">
+              <span class="habit-stat-num">{{ habit.bestDay || '—' }}</span>
+              <span class="habit-stat-label">最活跃</span>
+            </div>
           </div>
-          <div class="finished-info">
-            <p class="finished-title">{{ book.title }}</p>
-            <p class="finished-author">{{ book.author || '佚名' }}</p>
+          <div class="habit-bars">
+            <div class="habit-bar-row" v-for="(d, i) in habit.weekly || []" :key="i">
+              <span class="habit-bar-label">{{ d.label }}</span>
+              <div class="habit-bar-track">
+                <div class="habit-bar-fill" :style="{ width: (d.percent || 0) + '%' }"></div>
+              </div>
+              <span class="habit-bar-val">{{ d.minutes || 0 }}m</span>
+            </div>
           </div>
-          <svg class="finished-check" viewBox="0 0 24 24" width="20" height="20">
-            <circle cx="12" cy="12" r="10" fill="#D97706" opacity="0.15"/>
-            <path d="M8 12L11 15L16 9" stroke="#D97706" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div v-if="!finishedBooks.length" class="empty-inline">
-          还没有读完的书
         </div>
       </div>
-    </section>
+
+      <!-- 已读完列表 -->
+      <div class="stats-section" v-if="finishedBooks.length">
+        <div class="sec-head">
+          <span class="sec-title">已读完</span>
+          <span class="sec-hint">{{ finishedBooks.length }} 本</span>
+        </div>
+        <div class="fin-grid">
+          <div class="fin-card" v-for="book in finishedBooks" :key="book.id" @click="$router.push(`/reader/${book.id}`)">
+            <div class="fin-cover" :class="finCoverClass(book)" :style="finCoverStyle(book)">
+              <span class="fin-cover-title" v-if="!book.coverImagePath">{{ book.title }}</span>
+            </div>
+            <div class="fin-info">
+              <div class="fin-name">{{ book.title }}</div>
+              <div class="fin-meta">{{ book.author || '未知' }}</div>
+            </div>
+            <div class="fin-check">
+              <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#059669" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getHeatmap, getOverview, getHabit } from '../api/stats'
-import { getBookList } from '../api/book'
+import { getStatsOverview, getHeatmap, getWeeklyHabit } from '../api/stats'
+import { getBookshelf } from '../api/book'
 
-const router = useRouter()
-
-const currentYear = new Date().getFullYear()
-const overview = ref({ totalMinutes: 0, totalBooks: 0, streakDays: 0 })
+const overview = ref({})
 const heatmapData = ref([])
-const habitData = ref([0, 0, 0, 0, 0, 0, 0])
+const habit = ref({})
 const books = ref([])
 
-const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-
-const maxHabit = computed(() => Math.max(...habitData.value, 1))
-
-function barHeight(val) {
-  return (val / maxHabit.value) * 100
-}
-
-function formatNumber(n) {
-  if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
-  return n
-}
-
-function heatLevel(minutes) {
-  if (!minutes || minutes === 0) return 'level-0'
-  if (minutes < 15) return 'level-1'
-  if (minutes < 30) return 'level-2'
-  if (minutes < 60) return 'level-3'
-  return 'level-4'
-}
-
-function monthColStart(m) {
-  const firstDay = new Date(currentYear, m - 1, 1)
-  const dayOfYear = Math.floor((firstDay - new Date(currentYear, 0, 1)) / 86400000)
-  const weekIndex = Math.floor((dayOfYear + (new Date(currentYear, 0, 1).getDay() === 0 ? 6 : new Date(currentYear, 0, 1).getDay() - 1)) / 7)
-  return weekIndex + 1
-}
+const currentYear = new Date().getFullYear()
 
 const finishedBooks = computed(() => books.value.filter(b => b.status === 'finished'))
 
-function coverStyle(book) {
-  if (book.coverImagePath) return {}
-  const colors = [
-    'linear-gradient(135deg, #F59E0B, #D97706)',
-    'linear-gradient(135deg, #FBBF24, #B45309)',
-    'linear-gradient(135deg, #D97706, #92400E)'
-  ]
-  return { background: colors[(book.id || 0) % colors.length] }
+// 热力图数据映射 (date string -> data point)
+const heatmapMap = computed(() => {
+  const map = {}
+  heatmapData.value.forEach(d => {
+    map[d.date] = d
+  })
+  return map
+})
+
+// 热力图按周列布局 - 从1月1日所在周的周一开始，生成全年所有周
+const heatmapWeeks = computed(() => {
+  const year = currentYear
+  const map = heatmapMap.value
+
+  // 找到1月1日所在周的周一
+  const jan1 = new Date(year, 0, 1)
+  const jan1Dow = (jan1.getDay() + 6) % 7 // 周一=0, 周日=6
+  const firstMonday = new Date(jan1)
+  firstMonday.setDate(jan1.getDate() - jan1Dow)
+
+  // 生成所有周直到12月31日之后
+  const weeks = []
+  const cursor = new Date(firstMonday)
+  const dec31 = new Date(year, 11, 31)
+  while (cursor <= dec31) {
+    const week = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(cursor)
+      d.setDate(cursor.getDate() + i)
+      // 本地日期格式 YYYY-MM-DD
+      const dateStr = d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0')
+      if (d.getFullYear() !== year) {
+        week.push(null) // 年份外的日期不显示
+      } else if (map[dateStr]) {
+        week.push(map[dateStr])
+      } else {
+        week.push({ date: dateStr, minutes: 0 }) // 无数据但属于该年，显示灰色
+      }
+    }
+    weeks.push(week)
+    cursor.setDate(cursor.getDate() + 7)
+  }
+  return weeks
+})
+
+const heatmapWidth = computed(() => heatmapWeeks.value.length * 14 + 24)
+
+const months = computed(() => {
+  const result = []
+  let lastMonth = -1
+  let lastOffset = -100
+  heatmapWeeks.value.forEach((week, wi) => {
+    for (let i = 0; i < 7; i++) {
+      if (week[i]) {
+        const m = new Date(week[i].date).getMonth()
+        if (m !== lastMonth) {
+          const offset = wi * 14
+          // 间距小于3列的跳过避免重叠
+          if (offset - lastOffset >= 42 || lastMonth === -1) {
+            lastMonth = m
+            lastOffset = offset
+            result.push({ month: m, label: `${m + 1}月`, offset })
+          } else {
+            lastMonth = m
+            lastOffset = offset
+          }
+        }
+        break
+      }
+    }
+  })
+  return result
+})
+
+function heatLevel(minutes) {
+  if (!minutes || minutes === 0) return 0
+  if (minutes < 15) return 1
+  if (minutes < 30) return 2
+  if (minutes < 60) return 3
+  return 4
 }
 
-function coverUrl(book) {
-  if (!book.coverImagePath) return ''
-  const path = book.coverImagePath
-  if (path.startsWith('http')) return path
-  return '/api' + path
+// 格式化阅读时长
+function formatMinutes(mins) {
+  if (!mins) return '0分钟'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h > 0 && m > 0) return `${h}小时${m}分`
+  if (h > 0) return `${h}小时`
+  return `${m}分钟`
 }
 
-function openReader(bookId) {
-  router.push(`/reader/${bookId}`)
+// 已读书籍封面样式
+function finCoverStyle(book) {
+  if (book.coverImagePath) {
+    const url = book.coverImagePath.startsWith('http') ? book.coverImagePath : '/api' + book.coverImagePath
+    return { background: `url(${url}) center/cover` }
+  }
+  if (book.coverColor) {
+    return { background: book.coverColor }
+  }
+  return {}
+}
+function finCoverClass(book) {
+  if (book.coverImagePath || book.coverColor) return ''
+  return `cover-${(book.id % 6) + 1}`
 }
 
 onMounted(async () => {
   try {
-    const [heatmapRes, overviewRes, habitRes, bookRes] = await Promise.all([
+    const [ovRes, hmRes, habRes, bookRes] = await Promise.all([
+      getStatsOverview(),
       getHeatmap(currentYear),
-      getOverview(),
-      getHabit(),
-      getBookList()
+      getWeeklyHabit(),
+      getBookshelf()
     ])
+    // 概览数据：后端返回streakDays，前端用streak
+    const ov = ovRes.data || {}
+    overview.value = {
+      ...ov,
+      streak: ov.streakDays || 0,
+      totalMinutesText: formatMinutes(ov.totalMinutes)
+    }
+    heatmapData.value = hmRes.data || []
 
-    heatmapData.value = heatmapRes.data || []
-    overview.value = overviewRes.data || { totalMinutes: 0, totalBooks: 0, streakDays: 0 }
-    habitData.value = habitRes.data || [0, 0, 0, 0, 0, 0, 0]
+    // 阅读习惯：后端返回int[7](0=周一,6=周日)，需转换为对象格式
+    const rawHabit = Array.isArray(habRes.data) ? habRes.data : [0, 0, 0, 0, 0, 0, 0]
+    const dayLabels = ['一', '二', '三', '四', '五', '六', '日']
+    const maxVal = Math.max(...rawHabit, 1)
+    const total = rawHabit.reduce((a, b) => a + b, 0)
+    const activeDays = rawHabit.filter(v => v > 0).length
+    const bestIdx = rawHabit.indexOf(Math.max(...rawHabit))
+    habit.value = {
+      avgPerDay: activeDays > 0 ? Math.round(total / activeDays) : 0,
+      bestDay: Math.max(...rawHabit) > 0 ? dayLabels[bestIdx] : '—',
+      weekly: rawHabit.map((minutes, i) => ({
+        label: dayLabels[i],
+        minutes: minutes,
+        percent: maxVal > 0 ? Math.round(minutes * 100 / maxVal) : 0
+      }))
+    }
+
     books.value = bookRes.data || []
-  } catch (e) {}
+  } catch (e) {
+    console.error('加载统计数据失败:', e)
+  }
 })
 </script>
 
 <style scoped>
 .stats-page {
-  padding: 16px 16px 0;
+    min-height: calc(100vh - var(--nav-height));
+    padding-bottom: 48px;
 }
-
-.stats-header {
-  padding: 12px 4px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.stats-header h2 {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--color-text);
-}
-
-.year-label {
-  font-size: 13px;
-  color: var(--color-text-hint);
+.stats-content {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0;
 }
 
 /* 概览带 */
 .overview-band {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  border-radius: var(--radius-lg);
-  padding: 22px 16px;
-  margin-bottom: 24px;
-  box-shadow: var(--shadow-medium);
+    display: flex;
+    align-items: center;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    padding: 24px 0;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.ov-item {
+    flex: 1;
+    text-align: center;
+}
+.ov-divider {
+    width: 1px;
+    height: 48px;
+    background: var(--color-border-light);
+    flex-shrink: 0;
+}
+.ov-icon {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 8px;
+    border-radius: 10px;
+    background: #FEF3C7;
+    color: #D97706;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ov-icon svg { width: 18px; height: 18px; }
+.ov-num {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.1;
+}
+.ov-unit {
+    font-size: 13px;
+    font-weight: 500;
+    color: #92400E;
+    margin-left: 1px;
+}
+.ov-label {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    margin-top: 4px;
 }
 
-.overview-item {
-  flex: 1;
-  text-align: center;
+/* 区块 */
+.stats-section { margin-bottom: 32px; }
+.sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.sec-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.sec-hint {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
 }
 
-.overview-num {
-  display: block;
-  font-size: 26px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.2;
+/* 热力图 + 阅读习惯 */
+.heatmap-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 32px;
+}
+.heatmap-card {
+    flex: 1;
+    min-width: 0;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    padding: 18px 20px 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    overflow: hidden;
 }
 
-.overview-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 4px;
+.habit-card {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
-
-.overview-divider {
-  width: 1px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.25);
+.habit-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 14px;
 }
-
-/* 通用 section */
-.section {
-  margin-bottom: 24px;
+.habit-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 18px;
 }
-
-.section-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 12px;
-  padding: 0 4px;
+.habit-stat {
+    flex: 1;
+    text-align: center;
+    background: #FFFBEB;
+    border-radius: 10px;
+    padding: 10px 6px;
+}
+.habit-stat-num {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: #D97706;
+    line-height: 1.2;
+}
+.habit-stat-label {
+    display: block;
+    font-size: 11px;
+    color: #A16207;
+    margin-top: 2px;
+}
+.habit-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.habit-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.habit-bar-label {
+    width: 32px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+    text-align: right;
+}
+.habit-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #F3F0E8;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.habit-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #FCD34D, #F59E0B);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.habit-bar-val {
+    width: 38px;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+    text-align: right;
 }
 
 /* 热力图 */
-.heatmap-wrap {
-  padding: 16px;
-  overflow-x: auto;
+.heatmap-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.hm-months-row {
+    display: flex;
+    margin-bottom: 4px;
+}
+.hm-dow-spacer { flex-shrink: 0; }
+.hm-month {
+    position: absolute;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    line-height: 16px;
+    white-space: nowrap;
+}
+.hm-body-row {
+    display: flex;
+}
+.hm-dow-col {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+.hm-dow-label {
+    height: 11px;
+    font-size: 9px;
+    line-height: 11px;
+    color: var(--color-text-tertiary);
+    text-align: right;
+    padding-right: 6px;
+}
+.hm-dow-label:empty { visibility: hidden; }
+.hm-weeks {
+    flex-shrink: 0;
+    display: flex;
+    gap: 3px;
+}
+.hm-week {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.heat-cell {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    display: block;
+    flex-shrink: 0;
+}
+.heat-empty { background: transparent; }
+.heat-0 { background: #EBEDF0; }
+.heat-1 { background: #FDE68A; }
+.heat-2 { background: #FCD34D; }
+.heat-3 { background: #F59E0B; }
+.heat-4 { background: #D97706; }
+.heat-cell:not(.heat-empty):hover {
+    outline: 1.5px solid rgba(217,119,6,0.5);
+    outline-offset: -1px;
+}
+.hm-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+    margin-top: 10px;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
 }
 
-.heatmap-months {
-  display: grid;
-  grid-template-columns: repeat(53, 1fr);
-  margin-left: 28px;
-  margin-bottom: 4px;
-  gap: 2px;
+/* 已读完网格 */
+.fin-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
 }
-
-.month-label {
-  font-size: 10px;
-  color: var(--color-text-hint);
+.fin-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--color-text);
+    transition: box-shadow 0.2s, transform 0.2s;
 }
-
-.heatmap-grid {
-  display: flex;
-  gap: 4px;
+.fin-card:hover {
+    box-shadow: 0 3px 12px rgba(0,0,0,0.07);
+    transform: translateY(-1px);
 }
-
-.weekday-labels {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 1px 0;
-  width: 24px;
+.fin-cover {
+    width: 40px; height: 56px;
+    border-radius: 5px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
 }
-
-.weekday-label {
-  font-size: 10px;
-  color: var(--color-text-hint);
-  line-height: 11px;
-  height: 11px;
+.fin-cover-title {
+    color: #FFF; font-size: 9px; font-weight: 500;
+    text-align: center; line-height: 1.3;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    word-break: break-all;
 }
-
-.heatmap-cells {
-  display: grid;
-  grid-template-rows: repeat(7, 11px);
-  grid-auto-flow: column;
-  grid-auto-columns: 11px;
-  gap: 2px;
+.fin-info { flex: 1; min-width: 0; }
+.fin-name {
+    font-size: 13px; font-weight: 600;
+    color: var(--color-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.fin-meta { font-size: 11px; color: var(--color-text-tertiary); margin-top: 3px; }
+.fin-check { flex-shrink: 0; }
 
-.heatmap-cell {
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
-  background: #F3F0EA;
-}
-
-.heatmap-cell.level-0 {
-  background: #F3F0EA;
-}
-
-.heatmap-cell.level-1 {
-  background: #FEF3C7;
-}
-
-.heatmap-cell.level-2 {
-  background: #FBBF24;
-}
-
-.heatmap-cell.level-3 {
-  background: #F59E0B;
-}
-
-.heatmap-cell.level-4 {
-  background: #D97706;
-}
-
-.heatmap-legend {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 10px;
-  padding-left: 28px;
-}
-
-.legend-text {
-  font-size: 11px;
-  color: var(--color-text-hint);
-}
-
-.legend-cells {
-  display: flex;
-  gap: 2px;
-}
-
-/* 阅读习惯 */
-.habit-wrap {
-  padding: 20px 16px;
-}
-
-.habit-chart {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 140px;
-  gap: 8px;
-}
-
-.habit-bar-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-}
-
-.habit-bar-area {
-  flex: 1;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0 4px;
-}
-
-.habit-bar {
-  width: 100%;
-  max-width: 28px;
-  min-height: 4px;
-  background: linear-gradient(to top, var(--color-primary-dark), var(--color-primary));
-  border-radius: 6px 6px 0 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  transition: height 0.5s ease;
-  position: relative;
-}
-
-.habit-val {
-  position: absolute;
-  top: -20px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.habit-label {
-  font-size: 11px;
-  color: var(--color-text-hint);
-  margin-top: 6px;
-}
-
-/* 已读完列表 */
-.finished-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.finished-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: transform 0.15s;
-}
-
-.finished-item:active {
-  transform: scale(0.98);
-}
-
-.finished-cover {
-  width: 40px;
-  height: 54px;
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.cover-text {
-  font-size: 9px;
-  color: #fff;
-  font-weight: 600;
-  text-align: center;
-  padding: 2px;
-  line-height: 1.2;
-}
-
-.finished-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.finished-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.finished-author {
-  font-size: 12px;
-  color: var(--color-text-hint);
-  margin-top: 2px;
-}
-
-.finished-check {
-  flex-shrink: 0;
-}
-
-.empty-inline {
-  text-align: center;
-  padding: 30px;
-  color: var(--color-text-hint);
-  font-size: 13px;
+/* 响应式 */
+@media (max-width: 760px) {
+    .overview-band { flex-direction: column; padding: 20px 0; }
+    .ov-divider { width: 60%; height: 1px; }
+    .fin-grid { grid-template-columns: 1fr; }
+    .heatmap-row { flex-direction: column; }
+    .habit-card { width: 100%; }
 }
 </style>

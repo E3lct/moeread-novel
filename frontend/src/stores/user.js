@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import * as authApi from '../api/auth'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
   const userInfo = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+
+  const username = computed(() => userInfo.value?.username || '')
+  const nickname = computed(() => userInfo.value?.nickname || '')
+  const userId = computed(() => userInfo.value?.userId || null)
 
   async function login(username, password) {
     const res = await authApi.login(username, password)
@@ -35,6 +39,11 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('user', JSON.stringify(userInfo.value))
   }
 
+  // 实时预览背景设置（不调API，只更新本地状态）
+  function updateBgPreview(data) {
+    userInfo.value = { ...userInfo.value, ...data }
+  }
+
   function logout() {
     token.value = ''
     userInfo.value = null
@@ -42,5 +51,5 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('user')
   }
 
-  return { token, userInfo, login, register, fetchProfile, updateProfile, logout }
+  return { token, userInfo, username, nickname, userId, login, register, fetchProfile, updateProfile, updateBgPreview, logout }
 })

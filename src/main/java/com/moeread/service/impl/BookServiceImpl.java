@@ -82,19 +82,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             throw new RuntimeException("读取文件失败: " + e.getMessage());
         }
 
-        // 创建书籍
-        Book book = createBook(userId, title, null, "txt");
-        // 解析章节
-        List<Chapter> chapters = parseChapters(book.getId(), content);
-        if (!chapters.isEmpty()) {
-            for (Chapter ch : chapters) {
-                chapterMapper.insert(ch);
-            }
-            book.setChapterCount(chapters.size());
-            book.setTotalWords(content.length());
-            updateById(book);
-        }
-        return book;
+        return importTextContent(userId, title, null, content, "txt");
     }
 
     @Override
@@ -119,17 +107,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                 while ((len = zis.read(buf)) != -1) bos.write(buf, 0, len);
                 String content = new String(bos.toByteArray(), StandardCharsets.UTF_8);
 
-                Book book = createBook(userId, title, null, "zip");
-                List<Chapter> chapters = parseChapters(book.getId(), content);
-                if (!chapters.isEmpty()) {
-                    // 批量插入章节
-                    for (int i = 0; i < chapters.size(); i++) {
-                        chapterMapper.insert(chapters.get(i));
-                    }
-                    book.setChapterCount(chapters.size());
-                    book.setTotalWords(content.length());
-                    updateById(book);
-                }
+                Book book = importTextContent(userId, title, null, content, "zip");
                 imported.add(book);
                 zis.closeEntry();
             }
@@ -140,6 +118,27 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     }
 
     @Override
+    @Transactional
+    public Book importTextContent(Integer userId, String title, String author, String content, String sourceType) {
+        if (content == null || content.trim().isEmpty()) {
+            throw new RuntimeException("导入内容为空");
+        }
+        String safeTitle = title != null && !title.trim().isEmpty() ? title.trim() : "未命名书籍";
+        Book book = createBook(userId, safeTitle, author, sourceType);
+        List<Chapter> chapters = parseChapters(book.getId(), content);
+        if (!chapters.isEmpty()) {
+            for (Chapter ch : chapters) {
+                chapterMapper.insert(ch);
+            }
+            book.setChapterCount(chapters.size());
+            book.setTotalWords(content.length());
+            updateById(book);
+        }
+        return book;
+    }
+
+    @Override
+    @Transactional
     public void updateBook(Integer userId, Integer bookId, BookVO vo) {
         Book book = getOne(new LambdaQueryWrapper<Book>()
                 .eq(Book::getId, bookId).eq(Book::getUserId, userId));
@@ -148,8 +147,37 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         if (vo.getAuthor() != null) book.setAuthor(vo.getAuthor());
         if (vo.getDescription() != null) book.setDescription(vo.getDescription());
         if (vo.getCoverImagePath() != null) book.setCoverImagePath(vo.getCoverImagePath());
+        if (vo.getCoverColor() != null) book.setCoverColor(vo.getCoverColor());
+        if (vo.getStatus() != null) book.setStatus(vo.getStatus());
         if (vo.getIsFavorite() != null) book.setIsFavorite(vo.getIsFavorite());
         updateById(book);
+        // 同步标签
+        if (vo.getTags() != null) {
+            List<BookTag> existing = bookTagMapper.selectList(
+                    new LambdaQueryWrapper<BookTag>()
+                            .eq(BookTag::getBookId, bookId)
+                            .eq(BookTag::getUserId, userId));
+            Set<String> currentTags = new HashSet<>();
+            for (BookTag bt : existing) currentTags.add(bt.getTagName());
+            Set<String> newTags = new HashSet<>(vo.getTags());
+            // 添加新标签
+            for (String tag : newTags) {
+                if (!currentTags.contains(tag)) {
+                    BookTag bt = new BookTag();
+                    bt.setUserId(userId);
+                    bt.setBookId(bookId);
+                    bt.setTagName(tag);
+                    bt.setCreateTime(LocalDateTime.now());
+                    bookTagMapper.insert(bt);
+                }
+            }
+            // 删除旧标签
+            for (BookTag bt : existing) {
+                if (!newTags.contains(bt.getTagName())) {
+                    bookTagMapper.deleteById(bt.getId());
+                }
+            }
+        }
     }
 
     @Override

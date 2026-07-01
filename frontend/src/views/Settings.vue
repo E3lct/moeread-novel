@@ -1,197 +1,378 @@
 <template>
-  <div class="page-container settings-page">
-    <header class="settings-header">
-      <h2>设置</h2>
-    </header>
-
-    <!-- 个人信息 -->
-    <section class="card profile-card">
-      <div class="avatar-area">
-        <div class="avatar" :style="avatarStyle">
-          <img v-if="profile.avatar" :src="avatarUrl" class="avatar-img" />
-          <span v-else class="avatar-text">{{ (profile.nickname || profile.username || 'U')[0] }}</span>
-        </div>
-        <div class="profile-info">
-          <p class="profile-name">{{ profile.nickname || profile.username || '读者' }}</p>
-          <p class="profile-id">@{{ profile.username }}</p>
-        </div>
-        <button class="edit-profile-btn" @click="editProfile = !editProfile">
-          {{ editProfile ? '收起' : '编辑' }}
-        </button>
+  <div class="settings-page">
+    <div class="settings-content">
+      <!-- 页头 -->
+      <div class="page-header">
+        <div class="page-title">设置</div>
       </div>
 
-      <!-- 编辑个人信息 -->
-      <transition name="fade">
-        <div v-if="editProfile" class="profile-edit">
-          <div class="input-group">
-            <label>昵称</label>
-            <input v-model="profile.nickname" type="text" placeholder="设置昵称" />
+      <!-- 提示 -->
+      <div class="alert alert-success" v-if="successMsg">{{ successMsg }}</div>
+      <div class="alert alert-error" v-if="errorMsg">{{ errorMsg }}</div>
+
+      <!-- 个人信息 -->
+      <div class="accordion-item" :class="{ open: openSection === 'profile' }">
+        <div class="accordion-head" @click="toggleSection('profile')">
+          <span class="accordion-title">个人信息</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div class="settings-form">
+              <div class="form-row">
+                <label class="form-label">账号</label>
+                <span class="form-static">{{ userStore.username }}</span>
+              </div>
+              <div class="form-row">
+                <label class="form-label">昵称</label>
+                <input class="form-input" v-model="profile.nickname" placeholder="设置昵称" />
+              </div>
+              <div class="form-row">
+                <label class="form-label">头像</label>
+                <div class="avatar-preview" v-if="profile.avatar">
+                  <img :src="profile.avatar" />
+                </div>
+                <span class="form-static" v-else>未设置</span>
+              </div>
+              <div class="form-actions">
+                <button class="btn-primary" @click="saveProfile">保存</button>
+              </div>
+            </div>
           </div>
-          <button class="btn-primary save-btn" @click="saveProfile">保存</button>
-        </div>
-      </transition>
-    </section>
-
-    <!-- 阅读目标 -->
-    <section class="card setting-card">
-      <div class="setting-card-header">
-        <h3>每日阅读目标</h3>
-        <span class="goal-value">{{ profile.dailyGoal || 30 }} 分钟</span>
-      </div>
-      <div class="slider-wrap">
-        <input
-          v-model.number="dailyGoal"
-          type="range"
-          min="10"
-          max="120"
-          step="5"
-          class="slider"
-          @change="saveGoal"
-        />
-        <div class="slider-labels">
-          <span>10分</span>
-          <span>60分</span>
-          <span>120分</span>
         </div>
       </div>
-    </section>
 
-    <!-- 修改密码 -->
-    <section class="card setting-card">
-      <div class="setting-card-header" @click="showPasswordChange = !showPasswordChange">
-        <h3>修改密码</h3>
-        <svg viewBox="0 0 24 24" width="18" height="18" class="chevron" :class="{ rotated: showPasswordChange }">
-          <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <transition name="fade">
-        <div v-if="showPasswordChange" class="expand-content">
-          <div class="input-group">
-            <label>旧密码</label>
-            <input v-model="oldPassword" type="password" placeholder="当前密码" />
+      <!-- 个性化 -->
+      <div class="accordion-item" :class="{ open: openSection === 'customize' }">
+        <div class="accordion-head" @click="toggleSection('customize')">
+          <span class="accordion-title">个性化</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div class="settings-form">
+              <div class="form-row">
+                <label class="form-label">背景图</label>
+                <div class="bg-upload-area">
+                  <div class="bg-preview" v-if="bgSettings.mascotImage">
+                    <img :src="bgPreviewUrl" />
+                  </div>
+                  <span class="form-static" v-else>未设置</span>
+                  <div class="bg-actions">
+                    <label class="btn-upfile">
+                      选择图片
+                      <input type="file" accept="image/*" @change="onBgFileSelected" hidden />
+                    </label>
+                    <button class="btn-danger-ghost-sm" v-if="bgSettings.mascotImage" @click="removeBg">移除</button>
+                  </div>
+                </div>
+              </div>
+              <template v-if="bgSettings.mascotImage">
+                <div class="form-row">
+                  <label class="form-label">透明度</label>
+                  <div class="goal-slider-wrap">
+                    <input type="range" class="form-range" min="10" max="100" step="5" v-model.number="bgSettings.mascotOpacity"
+                      @input="previewBg" @change="saveBg" />
+                    <span class="goal-value">{{ bgSettings.mascotOpacity }}%</span>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">缩放</label>
+                  <div class="goal-slider-wrap">
+                    <input type="range" class="form-range" min="20" max="300" step="10" v-model.number="bgSettings.bgScale"
+                      @input="previewBg" @change="saveBg" />
+                    <span class="goal-value">{{ bgSettings.bgScale }}%</span>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">镜像翻转</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" v-model="bgSettings.bgMirror"
+                      @change="previewBg(); saveBg()" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </template>
+            </div>
           </div>
-          <div class="input-group">
-            <label>新密码</label>
-            <input v-model="newPassword" type="password" placeholder="新密码" />
-          </div>
-          <button class="btn-primary save-btn" @click="handleChangePassword">确认修改</button>
         </div>
-      </transition>
-    </section>
-
-    <!-- 导入历史 -->
-    <section class="card setting-card">
-      <div class="setting-card-header" @click="showImportHistory = !showImportHistory">
-        <h3>导入历史</h3>
-        <svg viewBox="0 0 24 24" width="18" height="18" class="chevron" :class="{ rotated: showImportHistory }">
-          <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
       </div>
-      <transition name="fade">
-        <div v-if="showImportHistory" class="expand-content">
+
+      <!-- 阅读目标 -->
+      <div class="accordion-item" :class="{ open: openSection === 'goal' }">
+        <div class="accordion-head" @click="toggleSection('goal')">
+          <span class="accordion-title">阅读目标</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div class="settings-form">
+              <div class="form-row">
+                <label class="form-label">每日目标</label>
+                <div class="goal-slider-wrap">
+                  <input type="range" class="form-range" min="10" max="120" step="5" v-model.number="dailyGoal" />
+                  <span class="goal-value">{{ dailyGoal }} 分钟</span>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-primary" @click="saveGoal">保存</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 修改密码 -->
+      <div class="accordion-item" :class="{ open: openSection === 'password' }">
+        <div class="accordion-head" @click="toggleSection('password')">
+          <span class="accordion-title">修改密码</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div class="settings-form">
+              <div class="form-row">
+                <label class="form-label">旧密码</label>
+                <input class="form-input" type="password" v-model="passwordForm.oldPassword" placeholder="请输入旧密码" />
+              </div>
+              <div class="form-row">
+                <label class="form-label">新密码</label>
+                <input class="form-input" type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+              </div>
+              <div class="form-actions">
+                <button class="btn-primary" @click="changePassword">修改密码</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 导入历史 -->
+      <div class="accordion-item" :class="{ open: openSection === 'history' }">
+        <div class="accordion-head" @click="toggleSection('history')">
+          <span class="accordion-title">导入历史</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
           <div class="import-list">
-            <div
-              v-for="book in importHistory"
-              :key="book.id"
-              class="import-item"
-            >
-              <span class="import-name">{{ book.title }}</span>
+            <div class="import-item" v-for="book in importHistory" :key="book.id">
+              <div class="import-info">
+                <span class="import-title">{{ book.title }}</span>
+                <span class="import-meta">{{ book.chapterCount || 0 }} 章</span>
+              </div>
               <span class="import-date">{{ formatDate(book.createTime) }}</span>
             </div>
-            <div v-if="!importHistory.length" class="empty-inline">暂无导入记录</div>
+            <div class="empty-mini" v-if="!importHistory.length">暂无导入记录</div>
           </div>
         </div>
-      </transition>
-    </section>
-
-    <!-- 关于 -->
-    <section class="card setting-card">
-      <div class="setting-card-header" @click="showAbout = !showAbout">
-        <h3>关于墨读</h3>
-        <svg viewBox="0 0 24 24" width="18" height="18" class="chevron" :class="{ rotated: showAbout }">
-          <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
       </div>
-      <transition name="fade">
-        <div v-if="showAbout" class="expand-content about-content">
-          <p class="about-version">墨读 Moeread v2.0</p>
-          <p class="about-desc">一个沉浸式小说阅读器</p>
-          <p class="about-tech">Spring Boot 3 + Vue 3 + MyBatis-Plus</p>
-          <p class="about-author">made with care</p>
-        </div>
-      </transition>
-    </section>
 
-    <!-- 退出登录 -->
-    <button class="logout-btn" @click="handleLogout">退出登录</button>
+      <!-- 关于 -->
+      <div class="accordion-item" :class="{ open: openSection === 'about' }">
+        <div class="accordion-head" @click="toggleSection('about')">
+          <span class="accordion-title">关于</span>
+          <span class="accordion-arrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </span>
+        </div>
+        <div class="accordion-body">
+          <div class="about-section">
+            <div class="about-logo">
+              <div class="about-logo-circle">墨</div>
+              <div>
+                <div class="about-name">墨读 Moeread</div>
+                <div class="about-version">v2.0.0 · Spring Boot + Vue 3</div>
+              </div>
+            </div>
+            <div class="about-desc">一个简洁的本地小说阅读器，支持 TXT/ZIP 导入、章节自动识别、阅读进度同步、摸鱼模式等功能。</div>
+            <a href="https://github.com/E3lct/moeread-novel" class="about-github" target="_blank">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.2.9 2.4v3.6c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+              GitHub
+            </a>
+            <div class="about-tech">
+              <span class="tech-tag">Spring Boot 3</span>
+              <span class="tech-tag">MyBatis-Plus</span>
+              <span class="tech-tag">Vue 3</span>
+              <span class="tech-tag">Vite</span>
+              <span class="tech-tag">MySQL 8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 退出登录 -->
+      <div class="logout-row">
+        <button class="btn-logout" @click="logout">退出登录</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { getProfile, updateProfile, changePassword } from '../api/auth'
-import { getBookList } from '../api/book'
+import { getProfile, updateProfile, changePassword as apiChangePassword } from '../api/auth'
+import { getBookshelf, uploadCover } from '../api/book'
 
 const router = useRouter()
 const userStore = useUserStore()
 
-const profile = ref({})
-const editProfile = ref(false)
+const openSection = ref('profile')
+const successMsg = ref('')
+const errorMsg = ref('')
+
+const profile = reactive({
+  nickname: '',
+  avatar: ''
+})
+
 const dailyGoal = ref(30)
-const showPasswordChange = ref(false)
-const showImportHistory = ref(false)
-const showAbout = ref(false)
-const oldPassword = ref('')
-const newPassword = ref('')
+const passwordForm = reactive({ oldPassword: '', newPassword: '' })
 const importHistory = ref([])
 
-const avatarStyle = computed(() => {
-  if (profile.value.avatar) return {}
-  return { background: 'linear-gradient(135deg, #F59E0B, #D97706)' }
+const bgSettings = reactive({
+  mascotImage: '',
+  mascotOpacity: 80,
+  bgScale: 100,
+  bgMirror: false
 })
 
-const avatarUrl = computed(() => {
-  if (!profile.value.avatar) return ''
-  const path = profile.value.avatar
-  if (path.startsWith('http')) return path
-  return '/api' + path
+const bgPreviewUrl = computed(() => {
+  const img = bgSettings.mascotImage
+  if (!img) return ''
+  return img.startsWith('http') ? img : '/api' + img
 })
 
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  return dateStr.slice(0, 10)
+function toggleSection(key) {
+  openSection.value = openSection.value === key ? '' : key
+}
+
+function formatDate(d) {
+  if (!d) return ''
+  return d.replace(/T.*/, '')
+}
+
+function showMsg(type, msg) {
+  if (type === 'success') {
+    successMsg.value = msg
+    errorMsg.value = ''
+  } else {
+    errorMsg.value = msg
+    successMsg.value = ''
+  }
+  setTimeout(() => { successMsg.value = ''; errorMsg.value = '' }, 3000)
 }
 
 async function saveProfile() {
   try {
-    await userStore.updateProfile({ nickname: profile.value.nickname })
-    editProfile.value = false
-  } catch (e) {}
+    await updateProfile({ nickname: profile.nickname })
+    userStore.updateBgPreview({ nickname: profile.nickname })
+    showMsg('success', '保存成功')
+  } catch (e) {
+    showMsg('error', e.message || '保存失败')
+  }
 }
 
 async function saveGoal() {
   try {
-    await userStore.updateProfile({ dailyGoal: dailyGoal.value })
-  } catch (e) {}
+    await updateProfile({ dailyGoal: dailyGoal.value })
+    showMsg('success', '目标已更新')
+  } catch (e) {
+    showMsg('error', e.message || '保存失败')
+  }
 }
 
-async function handleChangePassword() {
-  if (!oldPassword.value || !newPassword.value) {
-    alert('请填写完整')
+async function changePassword() {
+  if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+    showMsg('error', '请填写完整')
     return
   }
   try {
-    await changePassword(oldPassword.value, newPassword.value)
-    alert('密码修改成功')
-    oldPassword.value = ''
-    newPassword.value = ''
-    showPasswordChange.value = false
-  } catch (e) {}
+    await apiChangePassword(passwordForm.oldPassword, passwordForm.newPassword)
+    showMsg('success', '密码修改成功')
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+  } catch (e) {
+    showMsg('error', e.message || '修改失败')
+  }
 }
 
-function handleLogout() {
+async function onBgFileSelected(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  if (file.size > 2 * 1024 * 1024) {
+    showMsg('error', '图片大小不能超过2MB')
+    return
+  }
+  try {
+    const res = await uploadCover(file)
+    bgSettings.mascotImage = res.data.url
+    userStore.updateBgPreview({ mascotImage: res.data.url })
+    await updateProfile({ mascotImage: res.data.url })
+    showMsg('success', '背景图已更新')
+  } catch (err) {
+    showMsg('error', err.message || '上传失败')
+  }
+  e.target.value = ''
+}
+
+function previewBg() {
+  userStore.updateBgPreview({
+    mascotImage: bgSettings.mascotImage,
+    mascotOpacity: bgSettings.mascotOpacity,
+    bgScale: bgSettings.bgScale,
+    bgMirror: bgSettings.bgMirror
+  })
+}
+
+async function saveBg() {
+  try {
+    await updateProfile({
+      mascotOpacity: bgSettings.mascotOpacity,
+      bgScale: bgSettings.bgScale,
+      bgMirror: bgSettings.bgMirror ? 1 : 0
+    })
+  } catch (e) {
+    // 静默失败
+  }
+}
+
+async function removeBg() {
+  bgSettings.mascotImage = ''
+  bgSettings.mascotOpacity = 80
+  bgSettings.bgScale = 100
+  bgSettings.bgMirror = false
+  userStore.updateBgPreview({
+    mascotImage: '',
+    mascotOpacity: 80,
+    bgScale: 100,
+    bgMirror: false
+  })
+  try {
+    await updateProfile({
+      mascotImage: '',
+      mascotOpacity: 80,
+      bgScale: 100,
+      bgMirror: 0
+    })
+    showMsg('success', '背景图已移除')
+  } catch (e) {
+    showMsg('error', '移除失败')
+  }
+}
+
+function logout() {
   if (!confirm('确定退出登录吗？')) return
   userStore.logout()
   router.push('/login')
@@ -199,290 +380,440 @@ function handleLogout() {
 
 onMounted(async () => {
   try {
-    const [profileRes, bookRes] = await Promise.all([
-      getProfile(),
-      getBookList()
-    ])
-    profile.value = profileRes.data || {}
-    dailyGoal.value = profile.value.dailyGoal || 30
-    importHistory.value = (bookRes.data || []).slice().reverse().slice(0, 10)
-  } catch (e) {}
+    const res = await getProfile()
+    if (res.data) {
+      profile.nickname = res.data.nickname || ''
+      profile.avatar = res.data.avatar || ''
+      dailyGoal.value = res.data.dailyGoal || 30
+      bgSettings.mascotImage = res.data.mascotImage || ''
+      bgSettings.mascotOpacity = res.data.mascotOpacity ?? 80
+      bgSettings.bgScale = res.data.bgScale ?? 100
+      bgSettings.bgMirror = !!res.data.bgMirror
+      userStore.updateBgPreview({
+        mascotImage: bgSettings.mascotImage,
+        mascotOpacity: bgSettings.mascotOpacity,
+        bgScale: bgSettings.bgScale,
+        bgMirror: bgSettings.bgMirror
+      })
+      userStore.updateBgPreview({ nickname: res.data.nickname })
+    }
+    const bookRes = await getBookshelf()
+    importHistory.value = (bookRes.data || []).sort((a, b) =>
+      new Date(b.createTime) - new Date(a.createTime)
+    ).slice(0, 10)
+  } catch (e) {
+    console.error('加载设置失败:', e)
+  }
 })
 </script>
 
 <style scoped>
 .settings-page {
-  padding: 16px 16px 0;
+    min-height: calc(100vh - var(--nav-height));
+    padding-bottom: 48px;
+}
+.settings-content {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0;
 }
 
-.settings-header {
-  padding: 12px 4px 16px;
+/* 手风琴 */
+.accordion-item {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.accordion-item.open {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-.settings-header h2 {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--color-text);
+.accordion-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+.accordion-head:hover {
+    background: #FFFBEB;
+}
+.accordion-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+.accordion-arrow {
+    color: var(--color-text-tertiary);
+    transition: transform 0.2s;
+    display: flex;
+    align-items: center;
+}
+.accordion-item.open .accordion-arrow {
+    transform: rotate(180deg);
 }
 
-/* 个人信息卡片 */
-.profile-card {
-  padding: 20px;
-  margin-bottom: 16px;
+.accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+.accordion-item.open .accordion-body {
+    max-height: 800px;
 }
 
-.avatar-area {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.accordion-body-inner {
+    padding: 0 20px 18px;
 }
 
-.avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
+/* 表单 */
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 4px;
 }
-
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
-
-.avatar-text {
-  font-size: 22px;
-  font-weight: 700;
-  color: #fff;
+.form-label {
+    width: 80px;
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+    text-align: right;
 }
-
-.profile-info {
-  flex: 1;
+.form-static {
+    font-size: var(--font-size-md);
+    color: var(--color-text-tertiary);
 }
-
-.profile-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text);
+.form-input {
+    flex: 1;
+    padding: 7px 12px;
+    border: 1px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    background: var(--color-bg-card);
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
 }
-
-.profile-id {
-  font-size: 13px;
-  color: var(--color-text-hint);
-  margin-top: 2px;
-}
-
-.edit-profile-btn {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-primary-dark);
-  background: var(--color-primary-lightest);
-  padding: 6px 16px;
-  border-radius: 16px;
-  cursor: pointer;
-}
-
-.profile-edit {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border);
-}
-
-/* 通用设置卡片 */
-.setting-card {
-  padding: 0;
-  margin-bottom: 16px;
-  overflow: hidden;
-}
-
-.setting-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  cursor: pointer;
-}
-
-.setting-card-header h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.goal-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-primary-dark);
-}
-
-.chevron {
-  color: var(--color-text-hint);
-  transition: transform 0.3s;
-}
-
-.chevron.rotated {
-  transform: rotate(90deg);
-}
-
-.expand-content {
-  padding: 0 20px 20px;
-  border-top: 1px solid var(--color-border);
-  padding-top: 16px;
-}
+.form-input:focus { border-color: var(--color-primary); }
 
 /* 滑块 */
-.slider-wrap {
-  padding: 0 4px;
+.goal-slider-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.form-range {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #F3F0E8;
+    border-radius: 3px;
+    outline: none;
+}
+.form-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.form-range::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border: none; border-radius: 50%;
+    background: var(--color-primary);
+    cursor: pointer;
+}
+.goal-value {
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    color: var(--color-primary-dark);
+    min-width: 72px;
+    text-align: right;
 }
 
-.slider {
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  background: var(--color-primary-lighter);
-  border-radius: 2px;
-  outline: none;
+/* 头像预览 */
+.avatar-preview {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: #F5F2EC;
+    border: 1px dashed var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.avatar-preview img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
-.slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+/* 按钮 */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 4px;
 }
-
-.slider-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--color-text-hint);
+.btn-primary {
+    padding: 7px 24px;
+    background: var(--color-primary);
+    color: #FFF;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
 }
-
-/* 输入框 */
-.input-group {
-  margin-bottom: 14px;
-}
-
-.input-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 6px;
-}
-
-.input-group input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--color-text);
-  background: var(--color-primary-lightest);
-}
-
-.input-group input:focus {
-  border-color: var(--color-primary);
-  background: #fff;
-}
-
-.save-btn {
-  margin-top: 4px;
-  max-width: 200px;
-}
+.btn-primary:hover { background: var(--color-primary-dark); }
 
 /* 导入历史 */
 .import-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 20px 18px;
 }
-
 .import-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 14px;
+    background: #FAF8F3;
+    border-radius: var(--radius-md);
+    transition: background 0.2s;
 }
-
-.import-item:last-child {
-  border-bottom: none;
+.import-item:hover { background: var(--color-primary-palest); }
+.import-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
 }
-
-.import-name {
-  font-size: 13px;
-  color: var(--color-text);
-  font-weight: 500;
+.import-title {
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-
+.import-meta {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
 .import-date {
-  font-size: 12px;
-  color: var(--color-text-hint);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+.empty-mini {
+    font-size: var(--font-size-base);
+    color: var(--color-text-tertiary);
+    text-align: center;
+    padding: 16px;
 }
 
 /* 关于 */
-.about-content {
-  text-align: center;
+.about-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 20px 18px;
 }
-
-.about-version {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 8px;
+.about-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
-
+.about-logo-circle {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: #FFF;
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.about-name { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.about-version { font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
 .about-desc {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  margin-bottom: 4px;
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
 }
-
+.about-github {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #F6F8FA;
+    border: 1px solid #E1E4E8;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    color: #24292E;
+    transition: background 0.2s;
+    width: fit-content;
+}
+.about-github:hover {
+    background: #EDF2F7;
+    color: #24292E;
+}
 .about-tech {
-  font-size: 12px;
-  color: var(--color-text-hint);
-  margin-bottom: 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
 }
-
-.about-author {
-  font-size: 12px;
-  color: var(--color-text-hint);
+.tech-tag {
+    padding: 2px 10px;
+    background: var(--color-primary-palest);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-sm);
+    color: var(--color-primary-dark);
 }
 
 /* 退出登录 */
-.logout-btn {
-  width: 100%;
-  padding: 14px 0;
-  background: #fff;
-  border-radius: var(--radius-md);
-  font-size: 15px;
-  font-weight: 600;
-  color: #DC2626;
-  box-shadow: var(--shadow-soft);
-  cursor: pointer;
-  margin-bottom: 24px;
-  transition: transform 0.15s;
+.logout-row {
+    text-align: center;
+    padding: 12px 0 4px;
+}
+.btn-logout {
+    display: inline-block;
+    padding: 8px 32px;
+    color: #DC2626;
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+}
+.btn-logout:hover {
+    background: #FEF2F2;
+    color: #DC2626;
 }
 
-.logout-btn:active {
-  transform: scale(0.98);
+/* 个性化 */
+.bg-upload-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.bg-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-light);
+    flex-shrink: 0;
+}
+.bg-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.bg-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.btn-upfile {
+    display: inline-block;
+    padding: 6px 14px;
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    text-align: center;
+    font-family: inherit;
+}
+.btn-upfile:hover {
+    background: #FEF3C7;
+    border-color: var(--color-primary);
+}
+.btn-danger-ghost-sm {
+    padding: 6px 14px;
+    background: transparent;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+.btn-danger-ghost-sm:hover {
+    background: #FEF2F2;
+}
+/* 开关 */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #D1D5DB;
+    border-radius: 22px;
+    transition: background 0.2s;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--color-primary);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
 }
 
-.empty-inline {
-  text-align: center;
-  padding: 20px;
-  color: var(--color-text-hint);
-  font-size: 13px;
+/* 响应式 */
+@media (max-width: 640px) {
+    .form-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .form-label { text-align: left; width: auto; }
 }
 </style>

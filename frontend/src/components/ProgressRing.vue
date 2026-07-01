@@ -1,71 +1,57 @@
 <template>
-  <svg class="progress-ring" :width="size" :height="size" :viewBox="`0 0 ${size} ${size}`">
-    <circle
-      class="ring-bg"
-      :cx="size / 2"
-      :cy="size / 2"
-      :r="radius"
-      :stroke-width="strokeWidth"
-      fill="none"
-    />
-    <circle
-      class="ring-fill"
-      :cx="size / 2"
-      :cy="size / 2"
-      :r="radius"
-      :stroke-width="strokeWidth"
-      fill="none"
-      :stroke-dasharray="circumference"
-      :stroke-dashoffset="offset"
-      stroke-linecap="round"
-      :transform="`rotate(-90 ${size / 2} ${size / 2})`"
-    />
-    <text
-      v-if="showText"
-      class="ring-text"
-      :x="size / 2"
-      :y="size / 2"
-      text-anchor="middle"
-      dominant-baseline="central"
-      :font-size="size * 0.22"
-    >
-      {{ percent }}%
-    </text>
-  </svg>
+  <div class="book-progress-ring" v-if="percent > 0">
+    <svg width="52" height="52" viewBox="0 0 52 52">
+      <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3.5"/>
+      <circle
+        cx="26" cy="26" r="22" fill="none"
+        stroke="#fff" stroke-width="3.5"
+        stroke-linecap="round"
+        :stroke-dasharray="circumference"
+        :stroke-dashoffset="dashOffset"
+        class="ring-progress"
+        transform="rotate(-90 26 26)"
+      />
+      <text x="26" y="30" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">
+        {{ percent }}%
+      </text>
+    </svg>
+  </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 
 const props = defineProps({
-  percent: { type: Number, default: 0 },
-  size: { type: Number, default: 48 },
-  strokeWidth: { type: Number, default: 3 },
-  showText: { type: Boolean, default: false },
-  color: { type: String, default: '#F59E0B' }
+  percent: { type: Number, default: 0 }
 })
 
-const radius = computed(() => (props.size - props.strokeWidth) / 2)
-const circumference = computed(() => 2 * Math.PI * radius.value)
-const offset = computed(() => circumference.value * (1 - props.percent / 100))
+const radius = 22
+const circumference = 2 * Math.PI * radius
+const dashOffset = computed(() => circumference * (1 - props.percent / 100))
 </script>
 
 <style scoped>
-.progress-ring {
-  display: block;
+.book-progress-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s 0.2s;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.ring-bg {
-  stroke: rgba(255, 255, 255, 0.3);
+.book-progress-ring svg {
+    display: block;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));
 }
 
-.ring-fill {
-  stroke: var(--color-primary);
-  transition: stroke-dashoffset 0.5s ease;
-}
-
-.ring-text {
-  fill: #fff;
-  font-weight: 600;
+.ring-progress {
+    transition: stroke-dashoffset 1s ease-out;
 }
 </style>

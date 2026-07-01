@@ -242,7 +242,7 @@ onMounted(async () => {
     ])
     toc.value = tocRes.data || []
     let startIdx = 0
-    if (progressRes.data?.chapterIndex != null) {
+  if (progressRes.data?.chapterIndex != null) {
       startIdx = Math.min(progressRes.data.chapterIndex, toc.value.length - 1)
     }
     currentChapterIndex.value = startIdx

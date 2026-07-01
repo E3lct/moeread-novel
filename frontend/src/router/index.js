@@ -35,6 +35,12 @@ const routes = [
         name: 'Settings',
         component: () => import('../views/Settings.vue'),
         meta: { title: '设置' }
+      },
+      {
+        path: 'import',
+        name: 'Import',
+        component: () => import('../views/Import.vue'),
+        meta: { title: '导入' }
       }
     ]
   },
@@ -49,12 +55,6 @@ const routes = [
     name: 'MuckMode',
     component: () => import('../views/MuckMode.vue'),
     meta: { title: '摸鱼模式', hideNav: true }
-  },
-  {
-    path: '/import',
-    name: 'Import',
-    component: () => import('../views/Import.vue'),
-    meta: { title: '导入' }
   }
 ]
 

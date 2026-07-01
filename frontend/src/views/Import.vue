@@ -1,328 +1,703 @@
 <template>
-  <div class="page-container import-page">
-    <header class="import-header">
-      <button class="back-btn" @click="router.back()">
-        <svg viewBox="0 0 24 24" width="22" height="22">
-          <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <h2>导入书籍</h2>
-    </header>
+  <div class="import-page">
+    <div class="page-header import-header">
+      <div>
+        <div class="page-title">导入中心</div>
+        <div class="page-subtitle">本地文件、开放书源和个人目录统一管理</div>
+      </div>
+      <router-link to="/bookshelf" class="btn btn-ghost">返回书架</router-link>
+    </div>
 
-    <!-- 导入方式 -->
-    <div class="import-cards">
-      <!-- TXT 导入 -->
-      <div class="import-card card" @click="triggerUpload('txt')">
-        <div class="card-icon txt-icon">
-          <svg viewBox="0 0 32 32" width="32" height="32">
-            <path d="M8 4h12l6 6v18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M20 4v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <text x="16" y="22" text-anchor="middle" fill="currentColor" font-size="7" font-weight="bold">TXT</text>
+    <div class="import-workspace">
+      <aside class="import-rail">
+        <button class="rail-item" :class="{ active: mode === 'local' }" @click="mode = 'local'">
+          <span class="rail-kicker">文件</span>
+          <span class="rail-title">本地导入</span>
+          <span class="rail-meta">TXT / ZIP</span>
+        </button>
+        <button class="rail-item" :class="{ active: mode === 'source' }" @click="mode = 'source'">
+          <span class="rail-kicker">书源</span>
+          <span class="rail-title">开放书源</span>
+          <span class="rail-meta">{{ enabledSources.length }} 个已启用</span>
+        </button>
+      </aside>
+
+      <section class="import-panel" v-if="mode === 'local'">
+        <div class="panel-head">
+          <div>
+            <h2>本地文件</h2>
+            <p>选择 TXT 单本或 ZIP 批量文件</p>
+          </div>
+          <div class="format-switch">
+            <button :class="{ active: format === 'txt' }" @click="format = 'txt'">TXT</button>
+            <button :class="{ active: format === 'zip' }" @click="format = 'zip'">ZIP</button>
+          </div>
+        </div>
+
+        <div
+          class="upload-zone"
+          :class="{ dragover: isDragover }"
+          @click="triggerFileInput"
+          @dragover.prevent="isDragover = true"
+          @dragleave.prevent="isDragover = false"
+          @drop.prevent="handleDrop"
+        >
+          <svg class="upload-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M17 8l-5-5-5 5"/>
+            <path d="M12 3v12"/>
           </svg>
+          <div class="upload-title">{{ selectedFile ? selectedFile.name : '选择文件' }}</div>
+          <div class="upload-meta">{{ selectedFile ? formatFileSize(selectedFile.size) : format.toUpperCase() }}</div>
+          <input
+            ref="fileInput"
+            class="upload-input"
+            type="file"
+            :accept="format === 'txt' ? '.txt' : '.zip'"
+            @change="handleFileSelect"
+          />
         </div>
-        <div class="card-info">
-          <h3>TXT 单文件导入</h3>
-          <p>自动识别章节，支持中文编码</p>
+
+        <div class="action-row">
+          <button class="btn btn-primary" :disabled="!selectedFile || importing" @click="doImport">
+            {{ importing ? '导入中' : '开始导入' }}
+          </button>
+          <button class="btn btn-ghost" v-if="selectedFile" @click="selectedFile = null">清除</button>
+        </div>
+      </section>
+
+      <section class="import-panel" v-else>
+        <div class="panel-head">
+          <div>
+            <h2>开放书源</h2>
+            <p>选择书源后，从公开文本地址导入</p>
+          </div>
+          <button class="btn btn-ghost" @click="reloadSources">刷新</button>
+        </div>
+
+        <div class="source-grid">
+          <button
+            v-for="preset in presets"
+            :key="preset.sourceKey"
+            class="source-preset"
+            @click="addPreset(preset.sourceKey)"
+          >
+            <span class="source-name">{{ preset.name }}</span>
+            <span class="source-desc">{{ preset.description }}</span>
+            <span class="source-lang">{{ preset.language }}</span>
+          </button>
+        </div>
+
+        <div class="source-form">
+          <div class="form-grid">
+            <label>
+              <span>选择书源</span>
+              <select class="input" v-model.number="sourceImport.sourceId">
+                <option :value="0">请选择</option>
+                <option v-for="source in enabledSources" :key="source.sourceId" :value="source.sourceId">
+                  {{ source.name }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>书名</span>
+              <input class="input" v-model="sourceImport.title" placeholder="留空则从地址推断" />
+            </label>
+            <label>
+              <span>作者</span>
+              <input class="input" v-model="sourceImport.author" placeholder="未知作者" />
+            </label>
+            <label class="wide">
+              <span>公开 TXT 地址</span>
+              <input class="input" v-model="sourceImport.contentUrl" placeholder="https://example.com/book.txt" />
+            </label>
+          </div>
+          <div class="action-row">
+            <button class="btn btn-primary" :disabled="sourceImporting" @click="doSourceImport">
+              {{ sourceImporting ? '导入中' : '从书源导入' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="custom-source">
+          <div class="custom-title">自定义书源</div>
+          <div class="custom-row">
+            <input class="input" v-model="customSource.name" placeholder="名称" />
+            <input class="input" v-model="customSource.baseUrl" placeholder="目录地址" />
+            <button class="btn btn-ghost" @click="addCustom">添加</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="source-list" v-if="sources.length">
+      <div class="source-list-head">
+        <span>我的书源</span>
+        <span>{{ sources.length }} 个</span>
+      </div>
+      <div class="source-list-body">
+        <div class="source-row" v-for="source in sources" :key="source.sourceId">
+          <div>
+            <div class="source-row-name">{{ source.name }}</div>
+            <div class="source-row-url">{{ source.baseUrl || source.sourceType }}</div>
+          </div>
+          <label class="source-toggle">
+            <input type="checkbox" :checked="Number(source.enabled) === 1" @change="toggleSource(source, $event.target.checked)" />
+            <span></span>
+          </label>
         </div>
       </div>
+    </section>
 
-      <!-- ZIP 批量导入 -->
-      <div class="import-card card" @click="triggerUpload('zip')">
-        <div class="card-icon zip-icon">
-          <svg viewBox="0 0 32 32" width="32" height="32">
-            <path d="M8 4h12l6 6v18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M20 4v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <rect x="14" y="12" width="4" height="4" fill="currentColor"/>
-            <rect x="14" y="18" width="4" height="4" fill="currentColor"/>
-          </svg>
-        </div>
-        <div class="card-info">
-          <h3>ZIP 批量导入</h3>
-          <p>打包多个 TXT，一次导入</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 拖拽区域 -->
-    <div
-      class="drop-zone"
-      :class="{ dragging: isDragging }"
-      @dragover.prevent="isDragging = true"
-      @dragleave.prevent="isDragging = false"
-      @drop.prevent="handleDrop"
-    >
-      <svg viewBox="0 0 48 48" width="48" height="48">
-        <path d="M24 6L24 32M14 22L24 6L34 22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M8 36L8 42L40 42L40 36" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <p class="drop-text">将文件拖到此处</p>
-      <p class="drop-hint">支持 .txt 和 .zip 格式</p>
-    </div>
-
-    <!-- 导入进度 -->
-    <div v-if="importing" class="progress-section">
-      <p class="progress-text">{{ progressText }}</p>
-      <div class="progress-bar">
-        <div class="progress-fill"></div>
-      </div>
-    </div>
-
-    <!-- 导入结果 -->
-    <div v-if="importResult" class="result-section">
-      <p class="result-text" v-if="importResult.success">
-        导入成功：{{ importResult.message }}
-      </p>
-      <p class="result-text error" v-else>
-        导入失败：{{ importResult.message }}
-      </p>
-      <button v-if="importResult.success" class="btn-primary result-btn" @click="router.push('/bookshelf')">
-        去书架查看
-      </button>
-    </div>
-
-    <input ref="fileInput" type="file" :accept="acceptType" hidden @change="handleFileSelect" />
+    <div class="toast success" v-if="importResult">{{ importResult }}</div>
+    <div class="toast error" v-if="importError">{{ importError }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { importTxt, importZip } from '../api/book'
+import {
+  addCustomSource,
+  addPresetSource,
+  getSourceList,
+  getSourcePresets,
+  importFromSource,
+  updateSourceEnabled
+} from '../api/source'
 
-const router = useRouter()
-
-const fileInput = ref(null)
-const importType = ref('txt')
+const mode = ref('local')
+const format = ref('txt')
+const selectedFile = ref(null)
+const isDragover = ref(false)
 const importing = ref(false)
-const progressText = ref('')
-const importResult = ref(null)
-const isDragging = ref(false)
+const sourceImporting = ref(false)
+const importResult = ref('')
+const importError = ref('')
+const fileInput = ref(null)
+const presets = ref([])
+const sources = ref([])
 
-const acceptType = computed(() => {
-  if (importType.value === 'zip') return '.zip'
-  return '.txt'
+const sourceImport = reactive({
+  sourceId: 0,
+  title: '',
+  author: '',
+  contentUrl: ''
 })
 
-function triggerUpload(type) {
-  importType.value = type
-  importResult.value = null
+const customSource = reactive({
+  name: '',
+  baseUrl: ''
+})
+
+const enabledSources = computed(() => sources.value.filter(s => Number(s.enabled) === 1))
+
+function triggerFileInput() {
   fileInput.value?.click()
 }
 
-async function handleFileSelect(e) {
+function handleFileSelect(e) {
   const file = e.target.files[0]
-  if (file) await doImport(file)
-  e.target.value = ''
+  if (file) selectedFile.value = file
 }
 
 function handleDrop(e) {
-  isDragging.value = false
+  isDragover.value = false
   const file = e.dataTransfer.files[0]
-  if (!file) return
-
-  if (file.name.endsWith('.zip')) {
-    importType.value = 'zip'
-  } else if (file.name.endsWith('.txt')) {
-    importType.value = 'txt'
-  } else {
-    alert('不支持的文件格式')
-    return
-  }
-
-  importResult.value = null
-  doImport(file)
+  if (file) selectedFile.value = file
 }
 
-async function doImport(file) {
-  importing.value = true
-  progressText.value = '正在导入...'
-  importResult.value = null
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
 
+function showResult(message) {
+  importResult.value = message
+  importError.value = ''
+  setTimeout(() => { importResult.value = '' }, 3200)
+}
+
+function showError(message) {
+  importError.value = message
+  importResult.value = ''
+  setTimeout(() => { importError.value = '' }, 4200)
+}
+
+async function doImport() {
+  if (!selectedFile.value) return
+  importing.value = true
   try {
-    let res
-    if (importType.value === 'zip') {
-      res = await importZip(file)
-      importResult.value = {
-        success: true,
-        message: `成功导入 ${res.data?.length || 0} 本书`
-      }
-    } else {
-      res = await importTxt(file)
-      importResult.value = {
-        success: true,
-        message: res.data?.title || file.name
-      }
-    }
-  } catch (err) {
-    importResult.value = {
-      success: false,
-      message: err.response?.data?.msg || '未知错误'
-    }
+    const res = format.value === 'txt'
+      ? await importTxt(selectedFile.value)
+      : await importZip(selectedFile.value)
+    const count = Array.isArray(res.data) ? res.data.length : 1
+    showResult(`导入成功，新增 ${count} 本书`)
+    selectedFile.value = null
+    if (fileInput.value) fileInput.value.value = ''
+  } catch (e) {
+    showError(e.message || '导入失败')
   } finally {
     importing.value = false
   }
 }
+
+async function reloadSources() {
+  const [presetRes, sourceRes] = await Promise.all([getSourcePresets(), getSourceList()])
+  presets.value = presetRes.data || []
+  sources.value = sourceRes.data || []
+  if (!sourceImport.sourceId && enabledSources.value.length) {
+    sourceImport.sourceId = enabledSources.value[0].sourceId
+  }
+}
+
+async function addPreset(sourceKey) {
+  try {
+    await addPresetSource(sourceKey)
+    await reloadSources()
+    showResult('书源已添加')
+  } catch (e) {
+    showError(e.message || '添加失败')
+  }
+}
+
+async function addCustom() {
+  if (!customSource.name.trim()) {
+    showError('请输入书源名称')
+    return
+  }
+  try {
+    await addCustomSource({
+      name: customSource.name,
+      baseUrl: customSource.baseUrl,
+      sourceKey: 'custom-' + Date.now(),
+      sourceType: 'custom',
+      language: 'custom',
+      enabled: 1
+    })
+    customSource.name = ''
+    customSource.baseUrl = ''
+    await reloadSources()
+    showResult('自定义书源已添加')
+  } catch (e) {
+    showError(e.message || '添加失败')
+  }
+}
+
+async function toggleSource(source, enabled) {
+  try {
+    await updateSourceEnabled(source.sourceId, enabled)
+    source.enabled = enabled ? 1 : 0
+  } catch (e) {
+    showError(e.message || '更新失败')
+  }
+}
+
+async function doSourceImport() {
+  if (!sourceImport.sourceId) {
+    showError('请选择书源')
+    return
+  }
+  if (!sourceImport.contentUrl.trim()) {
+    showError('请输入公开 TXT 地址')
+    return
+  }
+  sourceImporting.value = true
+  try {
+    const res = await importFromSource({
+      sourceId: sourceImport.sourceId,
+      title: sourceImport.title,
+      author: sourceImport.author,
+      contentUrl: sourceImport.contentUrl
+    })
+    showResult(`《${res.data.title}》已导入`)
+    sourceImport.title = ''
+    sourceImport.author = ''
+    sourceImport.contentUrl = ''
+  } catch (e) {
+    showError(e.message || '书源导入失败')
+  } finally {
+    sourceImporting.value = false
+  }
+}
+
+onMounted(reloadSources)
 </script>
 
 <style scoped>
 .import-page {
-  padding: 16px 16px 0;
+  min-height: calc(100vh - var(--nav-height));
+  padding-bottom: 48px;
 }
 
 .import-header {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 4px 20px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
 }
 
-.back-btn {
+.import-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.import-rail {
   display: flex;
-  color: var(--color-text);
-  cursor: pointer;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.import-header h2 {
-  font-size: 22px;
+.rail-item {
+  border: 1px solid var(--color-border-neutral);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  font-family: inherit;
+}
+
+.rail-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-primary-light);
+}
+
+.rail-item.active {
+  background: #fff;
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 22px rgba(61, 46, 26, 0.08);
+}
+
+.rail-kicker,
+.rail-meta {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.rail-title {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.import-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
+.import-panel,
+.source-list {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  padding: 22px;
+  box-shadow: 0 10px 28px rgba(61, 46, 26, 0.06);
 }
 
-.import-card {
+.panel-head {
   display: flex;
-  align-items: center;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
-  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+
+.panel-head h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+.panel-head p {
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+.format-switch {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--color-border-neutral);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.format-switch button {
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 16px;
+  background: transparent;
+  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: transform 0.15s;
+  font-family: inherit;
 }
 
-.import-card:active {
-  transform: scale(0.98);
-}
-
-.card-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.txt-icon {
-  background: var(--color-primary-lightest);
-  color: var(--color-primary-dark);
-}
-
-.zip-icon {
-  background: #FEF3C7;
+.format-switch button.active {
+  background: var(--color-primary-pale);
   color: var(--color-primary-darker);
+  font-weight: 700;
 }
 
-.card-info h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.card-info p {
-  font-size: 12px;
-  color: var(--color-text-hint);
-  margin-top: 4px;
-}
-
-/* 拖拽区域 */
-.drop-zone {
+.upload-zone {
+  min-height: 260px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 10px;
+  background: linear-gradient(145deg, #fff, #fffbeb);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-hint);
-  transition: all 0.2s;
-  background: var(--color-card);
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.drop-zone.dragging {
+.upload-zone.dragover,
+.upload-zone:hover {
   border-color: var(--color-primary);
-  background: var(--color-primary-lightest);
+  background: #fff7df;
+}
+
+.upload-mark {
+  width: 38px;
+  height: 38px;
   color: var(--color-primary-dark);
 }
 
-.drop-text {
-  font-size: 14px;
-  font-weight: 600;
-  margin-top: 12px;
-}
-
-.drop-hint {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-/* 进度 */
-.progress-section {
-  margin-top: 20px;
+.upload-title {
+  max-width: 70%;
+  font-size: 18px;
+  font-weight: 700;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
-.progress-text {
-  font-size: 14px;
-  color: var(--color-text-secondary);
+.upload-meta {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+.upload-input {
+  display: none;
+}
+
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.source-preset {
+  min-height: 120px;
+  border: 1px solid var(--color-border-neutral);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.source-preset:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.source-name,
+.source-desc,
+.source-lang {
+  display: block;
+}
+
+.source-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
   margin-bottom: 8px;
 }
 
-.progress-bar {
-  width: 100%;
-  height: 4px;
-  background: var(--color-primary-lighter);
-  border-radius: 2px;
+.source-desc {
+  min-height: 38px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.source-lang {
+  margin-top: 10px;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef4f2;
+  color: #37695e;
+  font-size: 11px;
+}
+
+.source-form,
+.custom-source {
+  border-top: 1px solid var(--color-divider);
+  padding-top: 18px;
+  margin-top: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid label,
+.custom-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.custom-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.source-list {
+  margin-top: 18px;
+  padding: 0;
   overflow: hidden;
 }
 
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
-  border-radius: 2px;
-  animation: indeterminate 1.5s ease-in-out infinite;
+.source-list-head,
+.source-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
 }
 
-@keyframes indeterminate {
-  0% { width: 0; margin-left: 0; }
-  50% { width: 60%; margin-left: 20%; }
-  100% { width: 0; margin-left: 100%; }
+.source-list-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-divider);
+  font-weight: 700;
 }
 
-/* 结果 */
-.result-section {
-  margin-top: 20px;
-  text-align: center;
+.source-list-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.result-text {
-  font-size: 14px;
-  color: var(--color-primary-dark);
-  font-weight: 600;
-  margin-bottom: 16px;
+.source-row {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-divider);
 }
 
-.result-text.error {
-  color: #DC2626;
+.source-row:nth-child(odd) {
+  border-right: 1px solid var(--color-divider);
 }
 
-.result-btn {
-  max-width: 200px;
-  margin: 0 auto;
+.source-row-name {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.source-row-url {
+  max-width: 360px;
+  margin-top: 3px;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.source-toggle input {
+  opacity: 0;
+}
+
+.source-toggle span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #d1d5db;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.source-toggle span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.source-toggle input:checked + span {
+  background: var(--color-primary);
+}
+
+.source-toggle input:checked + span::after {
+  transform: translateX(18px);
+}
+
+.toast {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  padding: 11px 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+  z-index: 1200;
+  font-weight: 700;
+}
+
+.toast.success {
+  color: #047857;
+}
+
+.toast.error {
+  color: #dc2626;
+}
+
+@media (max-width: 860px) {
+  .import-workspace,
+  .source-list-body,
+  .source-grid,
+  .form-grid,
+  .custom-row {
+    grid-template-columns: 1fr;
+  }
+
+  .source-row:nth-child(odd) {
+    border-right: 0;
+  }
 }
 </style>

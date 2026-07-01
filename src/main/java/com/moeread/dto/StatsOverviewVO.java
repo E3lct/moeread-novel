@@ -7,4 +7,6 @@ public class StatsOverviewVO {
     private long totalMinutes;
     private long totalBooks;
     private long streakDays;
+    private long todayMinutes;
+    private Integer dailyGoal;
 }

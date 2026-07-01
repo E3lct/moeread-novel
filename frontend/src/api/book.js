@@ -4,6 +4,9 @@ export function getBookList() {
   return request.get('/book/list')
 }
 
+// alias
+export const getBookshelf = getBookList
+
 export function searchBooks(keyword) {
   return request.get('/book/search', { params: { keyword } })
 }

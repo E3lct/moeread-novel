@@ -1,639 +1,599 @@
 <template>
-  <div class="reader-page" :style="themeStyle" @click="handleTap">
-    <!-- 顶部工具栏 -->
-    <transition name="fade">
-      <header v-show="showToolbar" class="reader-header" :style="headerStyle">
-        <button @click.stop="goBack">
-          <svg viewBox="0 0 24 24" width="22" height="22">
-            <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <span class="reader-title">{{ bookTitle }}</span>
-        <button @click.stop="showSettings = !showSettings">
-          <svg viewBox="0 0 24 24" width="22" height="22">
-            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
-            <path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </header>
-    </transition>
+  <div class="reader-root" :class="`theme-${theme}`" :style="readerStyle">
+    <!-- 顶部栏 -->
+    <div class="reader-topbar">
+      <button class="reader-btn" @click="$router.back()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+        返回
+      </button>
 
-    <!-- 阅读内容 -->
-    <div class="reader-content" ref="contentRef" @scroll="onScroll">
-      <div class="content-inner" :style="contentStyle">
-        <h1 class="chapter-title">{{ chapter?.title || '加载中...' }}</h1>
-        <div class="chapter-text" v-if="chapter?.content">
-          <p
-            v-for="(para, i) in paragraphs"
-            :key="i"
-            class="paragraph"
-          >{{ para }}</p>
+      <button class="toc-toggle-btn" @click="tocCollapsed = !tocCollapsed">
+        <span class="toc-toggle-icon">{{ tocCollapsed ? '>' : '<' }}</span>
+      </button>
+
+      <div class="reader-topbar-title">{{ book.title }} - {{ currentChapter.title }}</div>
+
+      <router-link :to="`/muck/${bookId}`" class="reader-stealth-btn">
+        摸鱼模式
+      </router-link>
+    </div>
+
+    <!-- 主体 -->
+    <div class="reader-body">
+      <!-- 侧边目录 -->
+      <div class="reader-toc" :class="{ collapsed: tocCollapsed }">
+        <div class="toc-scroll">
+          <div class="toc-header">目录 ({{ chapters.length }})</div>
+          <div class="toc-list">
+            <div
+              v-for="(ch, i) in chapters"
+              :key="ch.id"
+              class="toc-item"
+              :class="{ active: i === currentChapterIndex }"
+              @click="goToChapter(i)"
+            >
+              {{ ch.title }}
+            </div>
+          </div>
         </div>
-        <div v-else class="loading-text">正在加载章节内容...</div>
+      </div>
 
-        <!-- 章节导航 -->
-        <div class="chapter-nav" v-if="chapter">
-          <button
-            class="nav-btn prev"
-            :disabled="currentChapterIndex <= 0"
-            @click.stop="goChapter(currentChapterIndex - 1)"
-          >上一章</button>
-          <button
-            class="nav-btn next"
-            :disabled="currentChapterIndex >= toc.length - 1"
-            @click.stop="goChapter(currentChapterIndex + 1)"
-          >下一章</button>
+      <!-- 正文 -->
+      <div class="reader-content-wrap" ref="contentWrap">
+        <div class="reader-content">
+          <h2 class="reader-chapter-title">{{ currentChapter.title }}</h2>
+          <div class="reader-text">
+            <p v-for="(para, i) in paragraphs" :key="i">{{ para }}</p>
+          </div>
+
+          <!-- 翻页栏 -->
+          <div class="reader-nav">
+            <button
+              class="reader-nav-btn"
+              :disabled="currentChapterIndex === 0"
+              @click="goToChapter(currentChapterIndex - 1)"
+            >上一章</button>
+            <span class="reader-nav-info">{{ currentChapterIndex + 1 }} / {{ chapters.length }}</span>
+            <button
+              class="reader-nav-btn"
+              :disabled="currentChapterIndex === chapters.length - 1"
+              @click="goToChapter(currentChapterIndex + 1)"
+            >下一章</button>
+          </div>
+          <div class="reader-shortcut-hint">键盘左右键翻页</div>
         </div>
       </div>
     </div>
 
-    <!-- 底部工具栏 -->
-    <transition name="fade">
-      <footer v-show="showToolbar" class="reader-footer" :style="footerStyle">
-        <button @click.stop="showToc = true">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          <span>目录</span>
-        </button>
-        <button @click.stop="prevChapter">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>上一章</span>
-        </button>
-        <button @click.stop="nextChapter">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>下一章</span>
-        </button>
-        <button @click.stop="enterMuck">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <rect x="3" y="4" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-            <line x1="7" y1="8" x2="17" y2="8" stroke="currentColor" stroke-width="1.5"/>
-            <line x1="7" y1="12" x2="13" y2="12" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-          <span>摸鱼</span>
-        </button>
-      </footer>
-    </transition>
-
-    <!-- 目录侧栏 -->
-    <transition name="slide">
-      <div v-if="showToc" class="toc-mask" @click="showToc = false">
-        <aside class="toc-sidebar" @click.stop>
-          <div class="toc-header">
-            <h3>目录</h3>
-            <span class="toc-count">{{ toc.length }} 章</span>
-          </div>
-          <div class="toc-list">
-            <div
-              v-for="(ch, i) in toc"
-              :key="ch.id"
-              class="toc-item"
-              :class="{ active: i === currentChapterIndex }"
-              @click="goChapter(i)"
-            >
-              <span class="toc-index">{{ i + 1 }}</span>
-              <span class="toc-title">{{ ch.title }}</span>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </transition>
+    <!-- 设置浮窗按钮 -->
+    <button class="reader-settings-fab" @click="settingsOpen = !settingsOpen">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+    </button>
 
     <!-- 设置面板 -->
-    <transition name="fade">
-      <div v-if="showSettings" class="settings-panel" @click.stop>
-        <h3>阅读设置</h3>
-
-        <div class="setting-row">
-          <span>字号</span>
-          <div class="setting-controls">
-            <button @click="readerStore.setFontSize(readerStore.fontSize - 1)">A-</button>
-            <span class="setting-value">{{ readerStore.fontSize }}</span>
-            <button @click="readerStore.setFontSize(readerStore.fontSize + 1)">A+</button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <span>行距</span>
-          <div class="setting-controls">
-            <button @click="readerStore.setLineHeight(readerStore.lineHeight - 0.1)">紧凑</button>
-            <span class="setting-value">{{ readerStore.lineHeight.toFixed(1) }}</span>
-            <button @click="readerStore.setLineHeight(readerStore.lineHeight + 0.1)">宽松</button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <span>主题</span>
-          <div class="theme-row">
-            <button
-              v-for="(t, key) in readerStore.themes"
-              :key="key"
-              class="theme-swatch"
-              :class="{ active: readerStore.theme === key }"
-              :style="{ background: t.bg, color: t.text }"
-              @click="readerStore.setTheme(key)"
-            >{{ t.name }}</button>
-          </div>
+    <div class="reader-settings-panel" :class="{ open: settingsOpen }">
+      <div class="settings-group">
+        <div class="settings-label">字号</div>
+        <div class="settings-controls">
+          <button class="settings-step-btn" @click="fontSize = Math.max(14, fontSize - 1)">-</button>
+          <span class="settings-value">{{ fontSize }}px</span>
+          <button class="settings-step-btn" @click="fontSize = Math.min(28, fontSize + 1)">+</button>
         </div>
       </div>
-    </transition>
+      <div class="settings-group">
+        <div class="settings-label">行距</div>
+        <div class="settings-controls">
+          <button class="settings-step-btn" @click="lineHeight = Math.max(1.4, lineHeight - 0.1)">-</button>
+          <span class="settings-value">{{ lineHeight.toFixed(1) }}</span>
+          <button class="settings-step-btn" @click="lineHeight = Math.min(3, lineHeight + 0.1)">+</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">主题</div>
+        <div class="theme-swatches">
+          <button class="theme-swatch" :style="{ background: '#FAF8F3' }" :class="{ selected: theme === 'default' }" @click="theme = 'default'" title="默认"></button>
+          <button class="theme-swatch" :style="{ background: '#1A1714' }" :class="{ selected: theme === 'night' }" @click="theme = 'night'" title="夜间"></button>
+          <button class="theme-swatch" :style="{ background: '#F0E6D2' }" :class="{ selected: theme === 'paper' }" @click="theme = 'paper'" title="护眼"></button>
+          <button class="theme-swatch" :style="{ background: '#E8EDE0' }" :class="{ selected: theme === 'green' }" @click="theme = 'green'" title="绿色"></button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useReaderStore } from '../stores/reader'
-import { getToc, getChapter } from '../api/chapter'
+import { getBookshelf } from '../api/book'
+import { getChapterList, getChapterContent } from '../api/chapter'
 import { getProgress, saveProgress } from '../api/progress'
+import { useReaderStore } from '../stores/reader'
 
 const route = useRoute()
 const router = useRouter()
 const readerStore = useReaderStore()
 
 const bookId = parseInt(route.params.bookId)
-const bookTitle = ref('')
-const toc = ref([])
-const chapter = ref(null)
+const book = ref({ title: '' })
+const chapters = ref([])
 const currentChapterIndex = ref(0)
-const showToolbar = ref(true)
-const showToc = ref(false)
-const showSettings = ref(false)
-const contentRef = ref(null)
+const currentChapter = ref({ title: '', content: '' })
+const tocCollapsed = ref(false)
+const settingsOpen = ref(false)
+const contentWrap = ref(null)
 
-let scrollTimer = null
-let saveTimer = null
+const fontSize = ref(readerStore.fontSize || 18)
+const lineHeight = ref(readerStore.lineHeight || 1.9)
+const theme = ref(readerStore.theme || 'default')
 
-const themeStyle = computed(() => {
-  const t = readerStore.themes[readerStore.theme]
-  return {
-    '--reader-bg': t.bg,
-    '--reader-text': t.text
-  }
-})
-
-const headerStyle = computed(() => ({
-  background: readerStore.themes[readerStore.theme].bg,
-  color: readerStore.themes[readerStore.theme].text,
-  borderBottom: `1px solid rgba(146, 64, 14, 0.1)`
-}))
-
-const footerStyle = computed(() => ({
-  background: readerStore.themes[readerStore.theme].bg,
-  color: readerStore.themes[readerStore.theme].text
-}))
-
-const contentStyle = computed(() => ({
-  fontSize: readerStore.fontSize + 'px',
-  lineHeight: readerStore.lineHeight,
-  color: 'var(--reader-text)'
+const readerStyle = computed(() => ({
+  '--reader-font-size': fontSize.value + 'px',
+  '--reader-line-height': lineHeight.value
 }))
 
 const paragraphs = computed(() => {
-  if (!chapter.value?.content) return []
-  return chapter.value.content.split('\n').filter(p => p.trim())
+  if (!currentChapter.value.content) return []
+  return currentChapter.value.content.split('\n').filter(p => p.trim())
 })
 
-function handleTap(e) {
-  if (showToc.value || showSettings.value) {
-    showToc.value = false
-    showSettings.value = false
-    return
-  }
-  // 点击中央区域翻页
-  const rect = e.currentTarget.getBoundingClientRect()
-  const y = e.clientY - rect.top
-  const h = rect.height
-  if (y < h * 0.3) {
-    // 上方：上一页
-    scrollBy(-rect.height * 0.8)
-  } else if (y > h * 0.7) {
-    // 下方：下一页
-    scrollBy(rect.height * 0.8)
-  } else {
-    // 中央：切换工具栏
-    showToolbar.value = !showToolbar.value
-  }
-}
-
-function scrollBy(delta) {
-  if (contentRef.value) {
-    contentRef.value.scrollBy({ top: delta, behavior: 'smooth' })
-  }
-}
-
-function onScroll() {
-  // 防抖保存进度
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    saveReadingProgress()
-  }, 2000)
-}
-
-async function saveReadingProgress() {
-  if (!contentRef.value || !chapter.value) return
-  const el = contentRef.value
-  const percent = el.scrollHeight > el.clientHeight
-    ? Math.round(el.scrollTop / (el.scrollHeight - el.clientHeight) * 100)
-    : 0
-  try {
-    await saveProgress(bookId, currentChapterIndex.value, percent)
-  } catch (e) {}
-}
-
-function goBack() {
-  saveReadingProgress()
-  router.back()
-}
-
-function prevChapter() {
-  if (currentChapterIndex.value > 0) goChapter(currentChapterIndex.value - 1)
-}
-
-function nextChapter() {
-  if (currentChapterIndex.value < toc.value.length - 1) goChapter(currentChapterIndex.value + 1)
-}
-
-async function goChapter(index) {
-  if (index < 0 || index >= toc.value.length) return
-  showToc.value = false
+async function loadChapter(index) {
+  if (index < 0 || index >= chapters.value.length) return
   currentChapterIndex.value = index
-
+  const ch = chapters.value[index]
   try {
-    const res = await getChapter(toc.value[index].id)
-    chapter.value = res.data
-    bookTitle.value = res.data?.title || chapter.value?.title || ''
-    // 滚动到顶部
+    const res = await getChapterContent(bookId, ch.id)
+    currentChapter.value = res.data || ch
     await nextTick()
-    if (contentRef.value) contentRef.value.scrollTop = 0
-    // 保存进度
-    await saveProgress(bookId, index, 0)
-  } catch (e) {}
+    if (contentWrap.value) contentWrap.value.scrollTop = 0
+    saveCurrentProgress()
+  } catch (e) {
+    console.error('加载章节失败:', e)
+  }
 }
 
-function enterMuck() {
-  saveReadingProgress()
-  router.push(`/muck/${bookId}`)
+function goToChapter(index) {
+  loadChapter(index)
+}
+
+async function saveCurrentProgress() {
+  try {
+    await saveProgress(bookId, {
+      chapterIndex: currentChapterIndex.value,
+      scrollPosition: 0
+    })
+  } catch (e) {
+    console.error('保存进度失败:', e)
+  }
 }
 
 function handleKeydown(e) {
-  switch (e.key) {
-    case 'ArrowLeft':
-    case 'ArrowUp':
-      e.preventDefault()
-      scrollBy(-200)
-      break
-    case 'ArrowRight':
-    case 'ArrowDown':
-    case ' ':
-      e.preventDefault()
-      scrollBy(200)
-      break
-    case 'Escape':
-      if (showToc.value) showToc.value = false
-      else if (showSettings.value) showSettings.value = false
-      else enterMuck()
-      break
+  if (e.key === 'ArrowLeft') {
+    if (currentChapterIndex.value > 0) goToChapter(currentChapterIndex.value - 1)
+  } else if (e.key === 'ArrowRight') {
+    if (currentChapterIndex.value < chapters.value.length - 1) goToChapter(currentChapterIndex.value + 1)
+  } else if (e.key === 'Escape') {
+    settingsOpen.value = false
   }
 }
 
+watch(fontSize, (v) => readerStore.setFontSize(v))
+watch(lineHeight, (v) => readerStore.setLineHeight(v))
+watch(theme, (v) => readerStore.setTheme(v))
+
 onMounted(async () => {
-  document.addEventListener('keydown', handleKeydown)
-
   try {
-    // 加载目录
-    const [tocRes, progressRes] = await Promise.all([
-      getToc(bookId),
-      getProgress(bookId)
+    const [bookRes, chRes] = await Promise.all([
+      getBookshelf(),
+      getChapterList(bookId)
     ])
-    toc.value = tocRes.data || []
+    book.value = (bookRes.data || []).find(b => b.id === bookId) || { title: '未知' }
+    chapters.value = chRes.data || []
 
-    // 恢复阅读进度
-    let startIdx = 0
-    if (progressRes.data?.chapterIndex != null) {
-      startIdx = Math.min(progressRes.data.chapterIndex, toc.value.length - 1)
-    }
-    currentChapterIndex.value = startIdx
-
-    // 加载章节内容
-    if (toc.value.length > 0) {
-      const chRes = await getChapter(toc.value[startIdx].id)
-      chapter.value = chRes.data
-      bookTitle.value = chRes.data?.title || ''
-
-      // 恢复滚动位置
-      await nextTick()
-      requestAnimationFrame(() => {
-        if (contentRef.value && progressRes.data?.scrollPercent) {
-          const el = contentRef.value
-          el.scrollTop = (el.scrollHeight - el.clientHeight) * progressRes.data.scrollPercent / 100
+    // 恢复进度
+    try {
+      const progRes = await getProgress(bookId)
+      if (progRes.data && progRes.data.chapterId) {
+        const idx = chapters.value.findIndex(c => c.id === progRes.data.chapterId)
+        if (idx !== -1) {
+          await loadChapter(idx)
+          return
         }
-      })
-    }
-  } catch (e) {}
+      }
+    } catch (e) {}
+
+    if (chapters.value.length) await loadChapter(0)
+  } catch (e) {
+    console.error('加载阅读器失败:', e)
+  }
+
+  window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-  saveReadingProgress()
+  window.removeEventListener('keydown', handleKeydown)
+  saveCurrentProgress()
 })
 </script>
 
 <style scoped>
-.reader-page {
-  height: 100vh;
-  background: var(--reader-bg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
+.reader-root {
+    --reader-bg: #FAF8F3;
+    --reader-text: #3D2E1A;
+    --reader-font-size: 18px;
+    --reader-line-height: 1.9;
+    --reader-max-width: 720px;
+    min-height: 100vh;
+    background: var(--reader-bg);
+    color: var(--reader-text);
+    transition: background 0.2s, color 0.2s;
 }
 
-/* 顶部工具栏 */
-.reader-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  z-index: 50;
-  backdrop-filter: blur(20px);
+.reader-root.theme-night { --reader-bg: #1A1714; --reader-text: #C8BFA8; }
+.reader-root.theme-paper { --reader-bg: #F0E6D2; --reader-text: #4A3820; }
+.reader-root.theme-green { --reader-bg: #E8EDE0; --reader-text: #2F3D2A; }
+
+/* 顶部栏 */
+.reader-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.reader-header button {
-  color: inherit;
-  cursor: pointer;
-  display: flex;
+.reader-root.theme-night .reader-topbar {
+    background: rgba(26, 23, 20, 0.82);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-.reader-title {
-  font-size: 15px;
-  font-weight: 600;
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.reader-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--reader-text);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
 }
 
-/* 阅读内容 */
-.reader-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 60px 24px 80px;
-  scroll-behavior: smooth;
+.reader-btn:hover { background: rgba(0, 0, 0, 0.05); }
+.reader-root.theme-night .reader-btn:hover { background: rgba(255, 255, 255, 0.06); }
+.reader-btn svg { width: 15px; height: 15px; fill: currentColor; }
+
+.reader-topbar-title {
+    flex: 1;
+    text-align: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.85;
 }
 
-.content-inner {
-  max-width: 680px;
-  margin: 0 auto;
+/* 目录切换按钮 */
+.toc-toggle-btn {
+    width: 34px;
+    height: 30px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: transparent;
+    color: var(--reader-text);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: -apple-system, "SF Mono", monospace;
+    transition: background 0.12s, border-color 0.12s;
 }
 
-.chapter-title {
-  font-size: 22px;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 32px;
-  color: var(--reader-text);
+.toc-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+.reader-root.theme-night .toc-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
-.paragraph {
-  margin-bottom: 16px;
-  text-indent: 2em;
-  color: var(--reader-text);
+.toc-toggle-icon {
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1;
 }
 
-.loading-text {
-  text-align: center;
-  color: var(--reader-text);
-  opacity: 0.5;
-  padding: 40px 0;
+/* 主体布局 */
+.reader-body {
+    display: flex;
+    min-height: calc(100vh - 52px);
 }
 
-.chapter-nav {
-  display: flex;
-  gap: 12px;
-  margin-top: 48px;
-  padding-bottom: 20px;
+/* 侧边目录 */
+.reader-toc {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 52px;
+    height: calc(100vh - 52px);
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.02);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    transition: width 0.25s cubic-bezier(.4,0,.2,1), opacity 0.2s;
+    z-index: 10;
 }
 
-.nav-btn {
-  flex: 1;
-  padding: 14px 0;
-  text-align: center;
-  border: 1.5px solid rgba(146, 64, 14, 0.15);
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--reader-text);
-  cursor: pointer;
-  transition: opacity 0.2s;
+.reader-root.theme-night .reader-toc {
+    background: rgba(255, 255, 255, 0.025);
+    border-right-color: rgba(255, 255, 255, 0.05);
 }
 
-.nav-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.reader-toc.collapsed {
+    width: 36px !important;
+    opacity: 0;
+    border-right: 0;
+    pointer-events: none;
 }
 
-/* 底部工具栏 */
-.reader-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  z-index: 50;
-  backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(146, 64, 14, 0.08);
-}
-
-.reader-footer button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  color: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-/* 目录侧栏 */
-.toc-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 100;
-}
-
-.toc-sidebar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 80%;
-  max-width: 320px;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
+.toc-scroll {
+    overflow-y: auto;
+    flex: 1;
 }
 
 .toc-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.toc-header h3 {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.toc-count {
-  font-size: 13px;
-  color: var(--color-text-hint);
+    padding: 16px 16px 10px;
+    font-size: 11px;
+    color: var(--reader-text);
+    opacity: 0.55;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
 }
 
 .toc-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 0;
+    list-style: none;
+    padding: 0 8px 24px;
+    margin: 0;
 }
 
 .toc-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  cursor: pointer;
-  transition: background 0.15s;
+    padding: 7px 11px;
+    border-radius: var(--radius-sm);
+    color: var(--reader-text);
+    opacity: 0.7;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+    transition: background 0.1s, opacity 0.1s;
 }
 
-.toc-item:active {
-  background: var(--color-primary-lightest);
-}
+.toc-item:hover { background: rgba(0, 0, 0, 0.04); opacity: 1; }
+.reader-root.theme-night .toc-item:hover { background: rgba(255, 255, 255, 0.04); }
 
 .toc-item.active {
-  background: var(--color-primary-lightest);
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    opacity: 1;
+    font-weight: 500;
+}
+.reader-root.theme-night .toc-item.active {
+    background: rgba(217, 119, 6, 0.18);
+    color: #FBBF24;
 }
 
-.toc-item.active .toc-title {
-  color: var(--color-primary-dark);
-  font-weight: 600;
+/* 正文区 */
+.reader-content-wrap {
+    flex: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
-.toc-index {
-  font-size: 12px;
-  color: var(--color-text-hint);
-  width: 28px;
-  flex-shrink: 0;
+.reader-content {
+    max-width: var(--reader-max-width);
+    margin: 0 auto;
+    padding: 44px 32px 120px;
+    font-size: var(--reader-font-size);
+    line-height: var(--reader-line-height);
 }
 
-.toc-title {
-  font-size: 14px;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.reader-chapter-title {
+    font-size: 1.35em;
+    font-weight: var(--font-semibold);
+    margin-bottom: 28px;
+    text-align: center;
+    color: var(--reader-text);
 }
+
+.reader-text p {
+    margin: 0 0 1.3em;
+    text-indent: 2em;
+    word-break: break-word;
+}
+
+/* 翻页栏 */
+.reader-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-top: 56px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.reader-root.theme-night .reader-nav { border-top-color: rgba(255, 255, 255, 0.06); }
+
+.reader-nav-btn {
+    padding: 9px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: transparent;
+    color: var(--reader-text);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.reader-nav-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: var(--color-primary);
+}
+.reader-root.theme-night .reader-nav-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.reader-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.reader-nav-info { font-size: var(--font-size-xs); opacity: 0.55; }
+
+.reader-shortcut-hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    opacity: 0.5;
+    margin-top: 16px;
+}
+
+/* 设置浮窗按钮 */
+.reader-settings-fab {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+    z-index: 60;
+    transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.reader-settings-fab:hover {
+    background: var(--color-primary-dark);
+    transform: scale(1.07);
+    box-shadow: 0 6px 22px rgba(217, 119, 6, 0.42);
+}
+
+.reader-settings-fab svg { width: 21px; height: 21px; fill: currentColor; }
 
 /* 设置面板 */
-.settings-panel {
-  position: fixed;
-  bottom: 60px;
-  left: 16px;
-  right: 16px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  z-index: 60;
-  box-shadow: var(--shadow-strong);
+.reader-settings-panel {
+    position: fixed;
+    right: 28px;
+    bottom: 86px;
+    width: 272px;
+    background: #fff;
+    color: var(--color-text);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.16);
+    padding: 16px 18px;
+    z-index: 60;
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
 }
 
-.settings-panel h3 {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 16px;
+.reader-settings-panel.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
 }
 
-.setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+.settings-group {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-divider);
 }
 
-.setting-row > span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+.settings-group:last-child { border-bottom: 0; }
+
+.settings-label {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 8px;
+    font-weight: 600;
 }
 
-.setting-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.settings-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.setting-controls button {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--color-primary-lightest);
-  color: var(--color-primary-dark);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
+.settings-step-btn {
+    width: 30px;
+    height: 28px;
+    border: 1px solid var(--color-border-neutral);
+    background: #fff;
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0;
 }
 
-.setting-controls button:active {
-  background: var(--color-primary-lighter);
+.settings-step-btn:hover { border-color: var(--color-primary); color: var(--color-primary-darker); }
+
+.settings-value {
+    flex: 1;
+    text-align: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    color: var(--color-text);
 }
 
-.setting-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
-  min-width: 30px;
-  text-align: center;
-}
-
-.theme-row {
-  display: flex;
-  gap: 8px;
-}
+.theme-swatches { display: flex; gap: 8px; }
 
 .theme-swatch {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: border-color 0.2s;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.1s;
 }
+.theme-swatch:hover { transform: scale(1.08); }
+.theme-swatch.selected { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-text); }
 
-.theme-swatch.active {
-  border-color: var(--color-primary);
+/* 摸鱼入口 */
+.reader-stealth-btn {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-medium);
+    color: var(--color-text-secondary);
+    padding: 5px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.6);
+    transition: all 0.15s;
+    white-space: nowrap;
+    user-select: none;
+}
+.reader-stealth-btn:hover {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);
 }
 </style>
