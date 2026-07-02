@@ -46,8 +46,17 @@
             <h3>{{ book.title }}</h3>
             <p class="result-author">{{ book.author || '未知作者' }}</p>
             <p class="result-desc">{{ book.description || '这个书源没有提供简介。' }}</p>
+            <p class="result-state" :class="downloadStatus(book).type" v-if="downloadStatus(book).message">
+              {{ downloadStatus(book).message }}
+            </p>
           </div>
-          <button class="download-btn" @click="downloadSourceBook(book)">下载</button>
+          <button
+            class="download-btn"
+            :disabled="downloadStatus(book).loading"
+            @click="downloadSourceBook(book)"
+          >
+            {{ downloadStatus(book).loading ? '下载中' : '下载' }}
+          </button>
         </article>
       </div>
     </section>
@@ -188,6 +197,7 @@ const keyword = ref('')
 const searchSourceId = ref(0)
 const searchResults = ref([])
 const subscribeUrl = ref('')
+const downloadStates = reactive({})
 
 const customSource = reactive({
   name: '',
@@ -350,6 +360,7 @@ async function searchBooks() {
   try {
     const res = await searchSourceBooks(keyword.value.trim(), searchSourceId.value)
     searchResults.value = res.data || []
+    Object.keys(downloadStates).forEach(key => delete downloadStates[key])
     if (!searchResults.value.length) showError('没有搜到可下载结果')
   } catch (e) {
     showError(e.message || '搜索失败')
@@ -358,7 +369,17 @@ async function searchBooks() {
   }
 }
 
+function bookKey(book) {
+  return `${book.sourceId || 0}-${book.contentUrl || book.title || ''}`
+}
+
+function downloadStatus(book) {
+  return downloadStates[bookKey(book)] || { loading: false, message: '', type: '' }
+}
+
 async function downloadSourceBook(book) {
+  const key = bookKey(book)
+  downloadStates[key] = { loading: true, message: '正在解析目录与正文，较慢书源可能需要一两分钟', type: 'pending' }
   try {
     const res = await importFromSource({
       sourceId: book.sourceId,
@@ -368,8 +389,10 @@ async function downloadSourceBook(book) {
       coverUrl: book.coverUrl,
       description: book.description
     })
+    downloadStates[key] = { loading: false, message: `已下载：${res.data.chapterCount || 0} 章`, type: 'success' }
     showResult(`《${res.data.title}》已下载到书架`)
   } catch (e) {
+    downloadStates[key] = { loading: false, message: e.message || '下载失败，请换一个结果或书源', type: 'error' }
     showError(e.message || '下载失败')
   }
 }
@@ -579,6 +602,25 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.result-state {
+  margin-top: 8px;
+  padding-right: 72px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.result-state.pending {
+  color: #8a5b12;
+}
+
+.result-state.success {
+  color: #047857;
+}
+
+.result-state.error {
+  color: #dc2626;
+}
+
 .download-btn {
   position: absolute;
   right: 12px;
@@ -589,6 +631,11 @@ onMounted(async () => {
   background: #efe6d5;
   color: #3f594f;
   cursor: pointer;
+}
+
+.download-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .local-head,

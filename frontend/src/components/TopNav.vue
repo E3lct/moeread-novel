@@ -1,12 +1,12 @@
 <template>
   <nav class="navbar">
-    <div class="navbar-logo" @click="router.push('/home')">
+    <button class="navbar-logo" type="button" @click="$emit('toggle-immersive')">
       <div class="navbar-logo-circle">墨</div>
       <div>
         <span class="navbar-logo-text">墨读</span>
         <span class="navbar-logo-sub">Moeread</span>
       </div>
-    </div>
+    </button>
 
     <div class="navbar-nav">
       <div
@@ -34,6 +34,8 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
+
+defineEmits(['toggle-immersive'])
 
 const route = useRoute()
 const router = useRouter()
@@ -84,6 +86,10 @@ const avatarText = computed(() => {
     cursor: pointer;
     transition: background 0.15s;
     border-radius: 8px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
 }
 
 .navbar-logo:hover {
