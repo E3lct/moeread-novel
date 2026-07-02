@@ -33,7 +33,7 @@
         还没有启用书源，先去“书源管理”导入或添加一个。
       </div>
       <div class="source-empty" v-else-if="!searchableSources.length">
-        当前启用的都是阅读/Legado 规则型书源，已可管理订阅，但搜索下载还需要后续规则引擎支持。
+        当前书源多为阅读/Legado 规则，搜索会自动挑选可直连的小说源。
       </div>
 
       <div class="result-grid" v-if="searchResults.length">
@@ -143,7 +143,7 @@
           <div>
             <strong>{{ source.name }}</strong>
             <span>{{ source.searchUrl || source.baseUrl || source.sourceType }}</span>
-            <em v-if="!source.searchUrl">规则型书源，待规则引擎支持搜索</em>
+            <em v-if="!source.searchUrl">规则型书源，会尝试读取内置搜索规则</em>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="Number(source.enabled) === 1" @change="toggleSource(source, $event.target.checked)" />

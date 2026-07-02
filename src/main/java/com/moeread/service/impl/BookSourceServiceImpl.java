@@ -266,6 +266,11 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             targets = list(new LambdaQueryWrapper<BookSource>()
                     .eq(BookSource::getUserId, userId)
                     .eq(BookSource::getEnabled, 1));
+            targets = targets.stream()
+                    .filter(this::isSearchCandidate)
+                    .sorted((left, right) -> Integer.compare(searchPriority(right), searchPriority(left)))
+                    .limit(8)
+                    .toList();
         }
 
         List<SourceBookVO> result = new ArrayList<>();
@@ -277,6 +282,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                     if (source.getSearchUrl() == null || source.getSearchUrl().isBlank()) continue;
                     result.addAll(searchOneSource(source, keyword.trim()));
                 }
+                if (result.size() >= 40) break;
             } catch (RuntimeException ignored) {
                 // 一个书源失败时继续搜索其他书源
             }
@@ -311,7 +317,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                         if (id != null) contentUrl = source.getContentUrlTemplate().replace("{id}", id);
                     }
                     vo.setContentUrl(resolveUrl(source, contentUrl));
-                    if (vo.getTitle() != null && vo.getContentUrl() != null) {
+                    if (vo.getTitle() != null && vo.getContentUrl() != null && matchesKeyword(vo, keyword)) {
                         result.add(vo);
                     }
                 }
@@ -327,10 +333,12 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         try {
             JsonNode rule = objectMapper.readTree(source.getRuleConfig());
             String searchUrl = firstText(rule, "ruleSearchUrl", "searchUrl");
+            if (searchUrl == null || searchUrl.isBlank()) searchUrl = nestedText(rule, "ruleSearch", "searchUrl", "url");
             if (searchUrl == null || searchUrl.isBlank()) searchUrl = source.getSearchUrl();
+            if (isUnsupportedSearchUrl(searchUrl)) return List.of();
             if (searchUrl == null || searchUrl.isBlank()) return List.of();
             String encoded = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            String url = searchUrl
+            String url = cleanLegadoUrl(searchUrl)
                     .replace("{{key}}", encoded)
                     .replace("{{keyword}}", encoded)
                     .replace("{{page}}", "1")
@@ -351,10 +359,10 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 SourceBookVO vo = new SourceBookVO();
                 vo.setSourceId(source.getId());
                 vo.setSourceName(source.getName());
-                vo.setTitle(extractRule(item, firstText(rule, "ruleSearchName", "name")));
+                vo.setTitle(extractRule(item, firstText(rule, "ruleSearchName", "name", "bookName")));
                 if (vo.getTitle() == null) vo.setTitle(extractRule(item, nestedText(rule, "ruleSearch", "name", "bookName")));
                 if (vo.getTitle() == null) vo.setTitle(item.text());
-                vo.setAuthor(extractRule(item, firstText(rule, "ruleSearchAuthor", "author")));
+                vo.setAuthor(extractRule(item, firstText(rule, "ruleSearchAuthor", "author", "bookAuthor")));
                 if (vo.getAuthor() == null) vo.setAuthor(extractRule(item, nestedText(rule, "ruleSearch", "author", "bookAuthor")));
                 vo.setDescription(extractRule(item, firstText(rule, "ruleSearchIntroduce", "ruleSearchDesc", "intro", "desc")));
                 if (vo.getDescription() == null) vo.setDescription(extractRule(item, nestedText(rule, "ruleSearch", "intro", "desc")));
@@ -368,12 +376,86 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 }
                 if (detailUrl == null || detailUrl.isBlank()) detailUrl = item.hasAttr("href") ? item.absUrl("href") : null;
                 vo.setContentUrl(resolveUrl(source, detailUrl));
-                if (vo.getTitle() != null && vo.getContentUrl() != null) result.add(vo);
+                if (vo.getTitle() != null && vo.getContentUrl() != null && matchesKeyword(vo, keyword)) result.add(vo);
             }
             return result;
         } catch (IOException e) {
             throw new RuntimeException("规则型书源配置无法解析");
         }
+    }
+
+    private boolean matchesKeyword(SourceBookVO book, String keyword) {
+        if (book == null || keyword == null || keyword.isBlank()) return true;
+        String normalizedKeyword = keyword.replaceAll("\\s+", "").toLowerCase();
+        String text = ((book.getTitle() == null ? "" : book.getTitle()) + " "
+                + (book.getAuthor() == null ? "" : book.getAuthor()) + " "
+                + (book.getDescription() == null ? "" : book.getDescription())).replaceAll("\\s+", "").toLowerCase();
+        if (!text.contains(normalizedKeyword)) return false;
+        return !containsAny(text, "高h", "ntr", "np", "sm", "调教", "淫", "情色", "成人", "肉文", "禁忌", "屌", "绿萧");
+    }
+
+    private boolean isSearchCandidate(BookSource source) {
+        if (source == null || source.getEnabled() == null || source.getEnabled() == 0) return false;
+        String ruleConfig = source.getRuleConfig();
+        String searchUrl = source.getSearchUrl();
+        JsonNode rule = null;
+        if (ruleConfig != null && !ruleConfig.isBlank()) {
+            try {
+                rule = objectMapper.readTree(ruleConfig);
+                if (searchUrl == null || searchUrl.isBlank()) {
+                    searchUrl = firstText(rule, "ruleSearchUrl", "searchUrl");
+                    if (searchUrl == null || searchUrl.isBlank()) searchUrl = nestedText(rule, "ruleSearch", "searchUrl", "url");
+                }
+                JsonNode type = rule.get("bookSourceType");
+                if (type != null && type.isNumber() && type.asInt() == 2) return false;
+            } catch (IOException ignored) {
+                return false;
+            }
+        }
+        if (searchUrl == null || searchUrl.isBlank() || isUnsupportedSearchUrl(searchUrl)) return false;
+        String text = ((source.getName() == null ? "" : source.getName()) + " "
+                + (source.getDescription() == null ? "" : source.getDescription()) + " "
+                + (source.getBaseUrl() == null ? "" : source.getBaseUrl())).toLowerCase();
+        return !containsAny(text, "漫画", "动漫", "视频", "短剧", "成人", "韩漫", "绅士", "gay", "腐漫", "搬山人",
+                "bbqqgg", "66story", "wnacg", "禁下载", "人机验证", "网页登录", "卡密", "购买");
+    }
+
+    private int searchPriority(BookSource source) {
+        String text = ((source.getName() == null ? "" : source.getName()) + " "
+                + (source.getDescription() == null ? "" : source.getDescription()) + " "
+                + (source.getBaseUrl() == null ? "" : source.getBaseUrl())).toLowerCase();
+        int score = 0;
+        if (containsAny(text, "小说", "书库", "书吧", "书阁", "阅读", "文学", "看书", "笔趣", "69书", "番茄")) score += 20;
+        if (containsAny(text, "精品", "网络文学", "轻小说", "奇书", "起点")) score += 8;
+        if (source.getSearchUrl() != null && source.getSearchUrl().startsWith("http")) score += 4;
+        if (containsAny(text, "验证码", "登录", "限免", "反爬", "接口", "api")) score -= 6;
+        return score;
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        if (text == null || text.isBlank()) return false;
+        for (String keyword : keywords) {
+            if (text.contains(keyword.toLowerCase())) return true;
+        }
+        return false;
+    }
+
+    private boolean isUnsupportedSearchUrl(String searchUrl) {
+        if (searchUrl == null || searchUrl.isBlank()) return true;
+        String value = searchUrl.trim();
+        return value.startsWith("@js")
+                || value.startsWith("<js>")
+                || value.contains("java.startBrowser")
+                || value.contains("\"webView\"")
+                || value.contains("{\"method\":\"POST\"")
+                || value.contains(",{");
+    }
+
+    private String cleanLegadoUrl(String url) {
+        if (url == null) return "";
+        return url.replaceAll("<,/?\\{\\{page}}>", "")
+                .replaceAll("<,/?\\{page}>", "")
+                .trim();
     }
 
     private String normalizeSubscribeUrl(String url) {
