@@ -254,6 +254,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
                 .replace("\uFEFF", "");
+        normalized = normalized.replaceAll("(?<!^)(?<!\\n)(第\\s*[0-9零〇一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]{1,8}\\s*[章章节回卷部集]\\s*[^\\n]{0,40})", "\n$1");
         String[] lines = normalized.split("\n");
         List<Chapter> chapters = new ArrayList<>();
 

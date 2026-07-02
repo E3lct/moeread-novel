@@ -31,8 +31,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -567,14 +570,10 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 }
             }
 
-            String chapterListRule = nestedText(rule, "ruleToc", "chapterList", "list");
-            Elements chapterItems = selectElements(tocDocument, chapterListRule);
-            if (chapterItems.isEmpty()) {
-                chapterItems = tocDocument.select(".chapter-list a, .catalog a, .chapter a, #list a, .listmain a, a[href]");
-            }
+            List<Element> chapterItems = collectChapterItems(source, rule, tocDocument, tocUri);
 
             StringBuilder bookContent = new StringBuilder();
-            int limit = Math.min(chapterItems.size(), 80);
+            int limit = Math.min(chapterItems.size(), 240);
             for (int i = 0; i < limit; i++) {
                 Element item = chapterItems.get(i);
                 String chapterName = extractRule(item, nestedText(rule, "ruleToc", "chapterName", "name", "title"));
@@ -587,9 +586,9 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                     String chapterBody = fetchText(validateHttpUrl(chapterUrl));
                     String chapterContent = extractChapterContent(rule, chapterBody, chapterUrl);
                     if (chapterContent == null || chapterContent.isBlank()) continue;
-                    bookContent.append(chapterName != null && !chapterName.isBlank() ? chapterName.trim() : "第 " + (i + 1) + " 章")
+                    bookContent.append(formatChapterTitle(i, chapterName))
                             .append('\n')
-                            .append(chapterContent.trim())
+                            .append(cleanChapterText(chapterContent))
                             .append("\n\n");
                 } catch (RuntimeException ignored) {
                     // 单章失败时继续尝试下一章
@@ -602,10 +601,41 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             if (directContent == null || directContent.isBlank()) {
                 throw new RuntimeException("规则型书源未解析到正文");
             }
-            return directContent;
+            return formatChapterTitle(0, "正文") + "\n" + cleanChapterText(directContent);
         } catch (IOException e) {
             throw new RuntimeException("规则型书源配置无法解析");
         }
+    }
+
+    private List<Element> collectChapterItems(BookSource source, JsonNode rule, Document firstDocument, URI firstUri) {
+        List<Element> allItems = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        Document currentDocument = firstDocument;
+        URI currentUri = firstUri;
+        String chapterListRule = nestedText(rule, "ruleToc", "chapterList", "list");
+        String nextRule = nestedText(rule, "ruleToc", "nextTocUrl", "nextUrl");
+
+        for (int page = 0; page < 12 && currentDocument != null && allItems.size() < 300; page++) {
+            visited.add(currentUri.toString());
+            Elements pageItems = selectElements(currentDocument, chapterListRule);
+            if (pageItems.isEmpty()) {
+                pageItems = currentDocument.select(".chapter-list a, .catalog a, .chapter a, #list a, .listmain a, a[href]");
+            }
+            allItems.addAll(pageItems);
+
+            String nextUrl = extractRule(currentDocument, nextRule);
+            nextUrl = resolveUrl(source, nextUrl);
+            if (nextUrl == null || nextUrl.isBlank() || visited.contains(nextUrl)) break;
+            try {
+                currentUri = validateHttpUrl(nextUrl);
+                String body = fetchText(currentUri);
+                if (!body.trim().startsWith("<")) break;
+                currentDocument = Jsoup.parse(body, currentUri.toString());
+            } catch (RuntimeException ignored) {
+                break;
+            }
+        }
+        return allItems;
     }
 
     private String extractChapterContent(JsonNode rule, String body, String url) {
@@ -619,7 +649,34 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             content = document.select("article, .content, #content, .chapter, .chapter-content, .read-content, .chapter_content_box").text();
         }
         if (content == null || content.isBlank()) return null;
-        return content.replaceAll("(?<=[。！？!?])\\s+", "\n");
+        return cleanChapterText(content);
+    }
+
+    private String formatChapterTitle(int index, String rawTitle) {
+        String title = cleanChapterText(rawTitle);
+        if (title == null || title.isBlank()) return "第" + (index + 1) + "章";
+        title = title.replaceAll("^\\s*第\\s*[0-9零〇一二两三四五六七八九十百千万]+\\s*[章章节回卷部集]\\s*", "").trim();
+        if (title.length() > 36) title = title.substring(0, 36);
+        return "第" + (index + 1) + "章" + (title.isBlank() ? "" : " " + title);
+    }
+
+    private String cleanChapterText(String value) {
+        if (value == null) return null;
+        String text = value
+                .replace("&nbsp;", " ")
+                .replaceAll("(?i)<\\s*br\\s*/?>", "\n")
+                .replaceAll("(?i)</\\s*p\\s*>", "\n")
+                .replaceAll("(?i)</\\s*div\\s*>", "\n")
+                .replaceAll("(?i)</\\s*li\\s*>", "\n");
+        if (text.contains("<") && text.contains(">")) {
+            text = Jsoup.parse(text).text();
+        }
+        return text
+                .replace('\u00A0', ' ')
+                .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+                .replaceAll("(?<=[。！？!?])\\s+", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
     }
 
     private BookSource getUserSource(Integer userId, Integer sourceId) {
@@ -757,7 +814,8 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             if (bytes.length > 20 * 1024 * 1024) {
                 throw new RuntimeException("文本过大，请下载后使用本地导入");
             }
-            return decodeText(bytes);
+            Optional<String> contentType = response.headers().firstValue("Content-Type");
+            return decodeText(bytes, contentType.orElse(null));
         } catch (IOException e) {
             throw new RuntimeException("无法连接书源: " + e.getMessage());
         } catch (InterruptedException e) {
@@ -767,17 +825,39 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     }
 
     private String decodeText(byte[] bytes) {
+        return decodeText(bytes, null);
+    }
+
+    private String decodeText(byte[] bytes, String contentType) {
         if (bytes.length >= 3
                 && (bytes[0] & 0xff) == 0xef
                 && (bytes[1] & 0xff) == 0xbb
                 && (bytes[2] & 0xff) == 0xbf) {
             return new String(bytes, 3, bytes.length - 3, StandardCharsets.UTF_8);
         }
+        String charset = extractCharset(contentType);
+        if (charset == null) {
+            String asciiHead = new String(bytes, 0, Math.min(bytes.length, 4096), StandardCharsets.ISO_8859_1);
+            charset = extractCharset(asciiHead);
+        }
+        if (charset != null) {
+            try {
+                return new String(bytes, Charset.forName(charset));
+            } catch (Exception ignored) {
+                // 继续使用兜底探测
+            }
+        }
         String utf8 = new String(bytes, StandardCharsets.UTF_8);
         if (utf8.indexOf('\uFFFD') >= 0) {
             return new String(bytes, Charset.forName("GB18030"));
         }
         return utf8;
+    }
+
+    private String extractCharset(String text) {
+        if (text == null || text.isBlank()) return null;
+        Matcher matcher = Pattern.compile("charset\\s*=\\s*['\"]?([a-zA-Z0-9_\\-]+)", Pattern.CASE_INSENSITIVE).matcher(text);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private URI validateHttpUrl(String url) {
@@ -841,8 +921,14 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             if (token.isEmpty() || isAttrToken(token)) continue;
             Elements next = new Elements();
             String css = toCssSelector(token);
+            Integer index = selectorIndex(token);
             for (Element element : current) {
-                next.addAll(element.select(css));
+                Elements selected = element.select(css);
+                if (index != null) {
+                    if (index >= 0 && index < selected.size()) next.add(selected.get(index));
+                } else {
+                    next.addAll(selected);
+                }
             }
             if (!next.isEmpty()) current = next;
         }
@@ -904,6 +990,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     }
 
     private String toCssSelector(String token) {
+        token = stripSelectorIndex(token);
         if (token.startsWith("class.")) return "." + token.substring(6);
         if (token.startsWith("id.")) return "#" + token.substring(3);
         if (token.startsWith("tag.")) return token.substring(4);
@@ -914,6 +1001,19 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             return "[" + attr + "]";
         }
         return token;
+    }
+
+    private Integer selectorIndex(String token) {
+        if (token == null || token.startsWith("attr.")) return null;
+        Matcher matcher = Pattern.compile("^(.*)\\.(\\d+)$").matcher(token);
+        if (!matcher.matches()) return null;
+        return Integer.parseInt(matcher.group(2));
+    }
+
+    private String stripSelectorIndex(String token) {
+        if (token == null || token.startsWith("attr.")) return token;
+        Matcher matcher = Pattern.compile("^(.*)\\.\\d+$").matcher(token);
+        return matcher.matches() ? matcher.group(1) : token;
     }
 
     private static BookSourceDTO preset(String key, String name, String type, String baseUrl,
