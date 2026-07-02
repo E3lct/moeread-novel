@@ -32,6 +32,9 @@
       <div class="source-empty" v-if="!enabledSources.length">
         还没有启用书源，先去“书源管理”导入或添加一个。
       </div>
+      <div class="source-empty" v-else-if="!searchableSources.length">
+        当前启用的都是阅读/Legado 规则型书源，已可管理订阅，但搜索下载还需要后续规则引擎支持。
+      </div>
 
       <div class="result-grid" v-if="searchResults.length">
         <article class="result-card" v-for="book in searchResults" :key="book.sourceId + book.contentUrl">
@@ -99,6 +102,7 @@
             >
               <strong>{{ sub.name }}</strong>
               <span>{{ sub.note }}</span>
+              <small>{{ sub.url }}</small>
             </button>
           </div>
           <div class="subscribe-line">
@@ -139,6 +143,7 @@
           <div>
             <strong>{{ source.name }}</strong>
             <span>{{ source.searchUrl || source.baseUrl || source.sourceType }}</span>
+            <em v-if="!source.searchUrl">规则型书源，待规则引擎支持搜索</em>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="Number(source.enabled) === 1" @change="toggleSource(source, $event.target.checked)" />
@@ -192,6 +197,7 @@ const customSource = reactive({
 })
 
 const enabledSources = computed(() => sources.value.filter(s => Number(s.enabled) === 1))
+const searchableSources = computed(() => enabledSources.value.filter(s => s.searchUrl))
 
 function triggerFileInput() {
   fileInput.value?.click()
@@ -299,23 +305,29 @@ async function importSourceJson(e) {
     const data = JSON.parse(text)
     const list = Array.isArray(data) ? data : (data.sources || [])
     if (!Array.isArray(list) || !list.length) throw new Error('书源 JSON 为空')
-    await addSourceBatch(list.map((item, i) => ({
-      name: item.name || `书源 ${i + 1}`,
-      sourceKey: item.sourceKey || `json-${Date.now()}-${i}`,
-      sourceType: item.sourceType || 'json_api',
-      baseUrl: item.baseUrl || '',
-      searchUrl: item.searchUrl || '',
-      contentUrlTemplate: item.contentUrlTemplate || '',
-      description: item.description || '',
-      language: item.language || 'custom',
-      enabled: item.enabled ?? 1
-    })))
+    await addSourceBatch(list.map((item, i) => normalizeSource(item, i)))
     await reloadSources()
     showResult(`已导入 ${list.length} 个书源`)
   } catch (err) {
     showError(err.message || '书源 JSON 解析失败')
   } finally {
     e.target.value = ''
+  }
+}
+
+function normalizeSource(item, i) {
+  const searchUrl = item.searchUrl || item.ruleSearchUrl || item.search || ''
+  const description = item.description || item.desc || item.sourceComment || item.bookSourceComment || item.comment || ''
+  return {
+    name: item.name || item.sourceName || item.bookSourceName || `书源 ${i + 1}`,
+    sourceKey: item.sourceKey || item.bookSourceUrl || item.sourceUrl || `json-${Date.now()}-${i}`,
+    sourceType: item.sourceType || (searchUrl ? 'json_api' : 'rule_source'),
+    baseUrl: item.baseUrl || item.bookSourceUrl || item.sourceUrl || item.url || '',
+    searchUrl,
+    contentUrlTemplate: item.contentUrlTemplate || item.contentUrl || item.ruleContentUrl || '',
+    description: description || (item.sourceGroup ? `分组: ${item.sourceGroup}` : ''),
+    language: item.language || item.lang || 'custom',
+    enabled: typeof item.enabled === 'boolean' ? (item.enabled ? 1 : 0) : (item.enabled ?? 1)
   }
 }
 
@@ -709,6 +721,14 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
+.subscription-card small {
+  display: block;
+  margin-top: 6px;
+  color: #9a8d7b;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 .subscribe-line {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -752,6 +772,14 @@ onMounted(async () => {
   color: #84796d;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.source-row em {
+  display: block;
+  margin-top: 5px;
+  color: #b45309;
+  font-size: 11px;
+  font-style: normal;
 }
 
 .switch {
