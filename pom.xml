@@ -82,6 +82,20 @@
             <version>1.5</version>
         </dependency>
 
+        <!-- HTML 解析与 CSS Selector，用于规则型书源 -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+
+        <!-- Mozilla Universal Charset Detector，用于 TXT 编码识别 -->
+        <dependency>
+            <groupId>com.googlecode.juniversalchardet</groupId>
+            <artifactId>juniversalchardet</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

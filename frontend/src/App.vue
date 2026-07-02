@@ -4,7 +4,9 @@
     v-if="bgStyle.backgroundImage"
     :style="bgStyle"
   ></div>
-  <router-view />
+  <div class="app-surface" :class="{ 'has-bg': bgStyle.backgroundImage }">
+    <router-view />
+  </div>
 </template>
 
 <script setup>
@@ -22,7 +24,7 @@ const bgStyle = computed(() => {
   const mirror = userStore.userInfo?.bgMirror
   return {
     backgroundImage: `url(${url})`,
-    opacity: opacity,
+    '--bg-overlay': String(1 - opacity),
     backgroundSize: `${scale}% ${scale}%`,
     transform: mirror ? 'scaleX(-1)' : 'scaleX(1)'
   }
@@ -42,14 +44,31 @@ onMounted(async () => {
 <style>
 .bg-layer {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100vw;
   height: 100vh;
   background-position: center center;
   background-repeat: no-repeat;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
-  transition: opacity 0.3s, background-size 0.2s, transform 0.2s;
+  transition: background-size 0.2s, transform 0.2s;
+}
+
+.bg-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 251, 235, var(--bg-overlay)) 0%, rgba(246, 243, 236, calc(var(--bg-overlay) * 0.92)) 48%, rgba(238, 244, 242, calc(var(--bg-overlay) * 0.86)) 100%);
+}
+
+.app-surface {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.app-surface.has-bg {
+  background: transparent;
 }
 </style>

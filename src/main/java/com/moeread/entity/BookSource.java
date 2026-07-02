@@ -23,6 +23,7 @@ public class BookSource {
     private String baseUrl;
     private String searchUrl;
     private String contentUrlTemplate;
+    private String ruleConfig;
     private String description;
     private String language;
     private Integer enabled;

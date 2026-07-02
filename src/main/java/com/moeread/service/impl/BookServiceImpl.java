@@ -6,6 +6,7 @@ import com.moeread.dto.BookVO;
 import com.moeread.entity.*;
 import com.moeread.mapper.*;
 import com.moeread.service.BookService;
+import org.mozilla.universalchardet.UniversalDetector;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,10 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -34,12 +37,16 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
     // 章节标题匹配规则（精简版，完整 Legado 规则后续移植）
     private static final String[] CHAPTER_PATTERNS = {
-        "^第.{1,6}[章回节].*",
-        "^Chapter\\s+\\d+",
-        "^[卷序]\\s*[一二三四五六七八九十百千].*",
-        "^[0-9]+[.、\\s].*",
-        "^第[0-9零一二三四五六七八九十百千]+[章节].*"
+        "^\\s*第\\s*[0-9零〇一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]+\\s*[章章节回卷部集]\\s*.*$",
+        "^\\s*[卷部集]\\s*[0-9零〇一二两三四五六七八九十百千万]+\\s*.*$",
+        "^\\s*(正文)?\\s*第\\s*.{1,12}\\s*[章章节回]\\s*.*$",
+        "^\\s*Chapter\\s+[0-9IVXLCDM]+\\b.*$",
+        "^\\s*[0-9]{1,5}\\s*[.、．]\\s*\\S.*$",
+        "^\\s*[序楔尾后番外终][章声篇记]?.*$"
     };
+    private static final List<Pattern> CHAPTER_TITLE_PATTERNS = Arrays.stream(CHAPTER_PATTERNS)
+            .map(Pattern::compile)
+            .toList();
 
     public BookServiceImpl(ChapterMapper chapterMapper, ReadProgressMapper readProgressMapper,
                            BookTagMapper bookTagMapper, TagMapper tagMapper,
@@ -77,7 +84,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
         String content;
         try {
-            content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            content = decodeText(file.getBytes());
         } catch (IOException e) {
             throw new RuntimeException("读取文件失败: " + e.getMessage());
         }
@@ -105,7 +112,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                 byte[] buf = new byte[4096];
                 int len;
                 while ((len = zis.read(buf)) != -1) bos.write(buf, 0, len);
-                String content = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                String content = decodeText(bos.toByteArray());
 
                 Book book = importTextContent(userId, title, null, content, "zip");
                 imported.add(book);
@@ -229,7 +236,11 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
     /** 解析章节 */
     private List<Chapter> parseChapters(Integer bookId, String content) {
-        String[] lines = content.split("\n");
+        String normalized = content
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replace("\uFEFF", "");
+        String[] lines = normalized.split("\n");
         List<Chapter> chapters = new ArrayList<>();
 
         int startLine = 0;
@@ -244,10 +255,18 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             }
 
             boolean isTitle = false;
-            for (String pattern : CHAPTER_PATTERNS) {
-                if (line.matches(pattern)) {
+            if (line.length() <= 60) {
+                for (Pattern pattern : CHAPTER_TITLE_PATTERNS) {
+                    if (pattern.matcher(line).matches()) {
+                        isTitle = true;
+                        break;
+                    }
+                }
+            }
+            if (!isTitle && line.length() <= 40 && chapterContent.length() > 1500) {
+                if (line.matches("^\\s*[一二三四五六七八九十百千万]+\\s*$")
+                        || line.matches("^\\s*[0-9]{1,4}\\s*$")) {
                     isTitle = true;
-                    break;
                 }
             }
 
@@ -277,6 +296,53 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         }
 
         return chapters;
+    }
+
+    private String decodeText(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return "";
+        if (bytes.length >= 3
+                && (bytes[0] & 0xff) == 0xef
+                && (bytes[1] & 0xff) == 0xbb
+                && (bytes[2] & 0xff) == 0xbf) {
+            return new String(bytes, 3, bytes.length - 3, StandardCharsets.UTF_8);
+        }
+        UniversalDetector detector = new UniversalDetector(null);
+        detector.handleData(bytes, 0, bytes.length);
+        detector.dataEnd();
+        String charset = detector.getDetectedCharset();
+        detector.reset();
+        if (charset == null || charset.isBlank()) {
+            charset = looksLikeUtf8(bytes) ? "UTF-8" : "GB18030";
+        }
+        try {
+            return new String(bytes, Charset.forName(charset));
+        } catch (Exception e) {
+            return new String(bytes, Charset.forName("GB18030"));
+        }
+    }
+
+    private boolean looksLikeUtf8(byte[] bytes) {
+        int i = 0;
+        while (i < bytes.length) {
+            int b = bytes[i] & 0xff;
+            if (b <= 0x7f) {
+                i++;
+            } else if ((b >> 5) == 0b110 && i + 1 < bytes.length && ((bytes[i + 1] & 0xc0) == 0x80)) {
+                i += 2;
+            } else if ((b >> 4) == 0b1110 && i + 2 < bytes.length
+                    && ((bytes[i + 1] & 0xc0) == 0x80)
+                    && ((bytes[i + 2] & 0xc0) == 0x80)) {
+                i += 3;
+            } else if ((b >> 3) == 0b11110 && i + 3 < bytes.length
+                    && ((bytes[i + 1] & 0xc0) == 0x80)
+                    && ((bytes[i + 2] & 0xc0) == 0x80)
+                    && ((bytes[i + 3] & 0xc0) == 0x80)) {
+                i += 4;
+            } else {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Chapter buildChapter(Integer bookId, int index, String title, String content) {

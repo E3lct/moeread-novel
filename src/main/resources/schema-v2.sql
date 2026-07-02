@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS book_sources (
   base_url VARCHAR(500) DEFAULT '',
   search_url VARCHAR(800) DEFAULT '',
   content_url_template VARCHAR(800) DEFAULT '',
+  rule_config TEXT,
   description VARCHAR(500) DEFAULT '',
   language VARCHAR(20) DEFAULT 'custom',
   enabled TINYINT DEFAULT 1,
@@ -24,6 +25,18 @@ SET @sql = (
   )
   FROM INFORMATION_SCHEMA.COLUMNS
   WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'book_sources' AND COLUMN_NAME = 'search_url'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE book_sources ADD COLUMN rule_config TEXT',
+    'SELECT 1'
+  )
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'book_sources' AND COLUMN_NAME = 'rule_config'
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
