@@ -3,7 +3,7 @@ import router from '../router'
 
 const request = axios.create({
   baseURL: '/api',
-  timeout: 30000
+  timeout: 90000
 })
 
 // 请求拦截：自动携带 JWT
@@ -36,6 +36,8 @@ request.interceptors.response.use(
       }
       const msg = error.response.data?.message || '网络错误'
       alert(msg)
+    } else if (error.code === 'ECONNABORTED') {
+      alert('请求超时，书源站点响应较慢，请稍后重试或换一个书源')
     } else {
       alert('网络连接失败')
     }
