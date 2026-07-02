@@ -130,7 +130,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         if (content == null || content.trim().isEmpty()) {
             throw new RuntimeException("导入内容为空");
         }
-        String safeTitle = title != null && !title.trim().isEmpty() ? title.trim() : "未命名书籍";
+        String safeTitle = cleanField(title, 200, "未命名书籍");
         Book book = createBook(userId, safeTitle, author, sourceType);
         List<Chapter> chapters = parseChapters(book.getId(), content);
         if (!chapters.isEmpty()) {
@@ -224,14 +224,28 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     private Book createBook(Integer userId, String title, String author, String sourceType) {
         Book book = new Book();
         book.setUserId(userId);
-        book.setTitle(title);
-        book.setAuthor(author != null ? author : "未知");
+        book.setTitle(cleanField(title, 200, "未命名书籍"));
+        book.setAuthor(cleanAuthor(author));
         book.setCoverColor(Book.randomCoverColor());
-        book.setSourceType(sourceType);
+        book.setSourceType(cleanField(sourceType, 120, "import"));
         book.setStatus("reading");
         book.setIsFavorite(0);
         save(book);
         return book;
+    }
+
+    private String cleanAuthor(String author) {
+        String value = cleanField(author, 120, "未知");
+        if (value.length() > 40 && value.matches(".*(简介|推荐度|连载|完结|章节|万字|第\\s*\\d+|。|，).*")) {
+            return "未知";
+        }
+        return value;
+    }
+
+    private String cleanField(String value, int maxLength, String fallback) {
+        String cleaned = value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        if (cleaned.isEmpty()) return fallback;
+        return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength);
     }
 
     /** 解析章节 */

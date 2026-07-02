@@ -240,9 +240,13 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         if (title == null || title.trim().isEmpty()) {
             title = deriveTitle(uri);
         }
+        String coverUrl = dto.getCoverUrl();
+        if ((coverUrl == null || coverUrl.isBlank()) && "rule_source".equals(source.getSourceType())) {
+            coverUrl = fetchSourceCover(source, uri);
+        }
         Book book = bookService.importTextContent(userId, title, dto.getAuthor(), content, "source:" + source.getSourceKey());
-        if (dto.getCoverUrl() != null && !dto.getCoverUrl().isBlank()) {
-            book.setCoverImagePath(dto.getCoverUrl().trim());
+        if (coverUrl != null && !coverUrl.isBlank()) {
+            book.setCoverImagePath(coverUrl.trim());
         }
         if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
             book.setDescription(dto.getDescription().trim());
@@ -252,6 +256,21 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             bookService.updateById(book);
         }
         return book;
+    }
+
+    private String fetchSourceCover(BookSource source, URI uri) {
+        if (source.getRuleConfig() == null || source.getRuleConfig().isBlank()) return null;
+        try {
+            JsonNode rule = objectMapper.readTree(source.getRuleConfig());
+            String body = fetchText(uri);
+            if (!body.trim().startsWith("<")) return null;
+            Document document = Jsoup.parse(body, uri.toString());
+            String cover = extractRule(document, nestedText(rule, "ruleBookInfo", "coverUrl", "cover"));
+            if (cover == null || cover.isBlank()) cover = findImageUrl(document);
+            return resolveUrl(source, cover);
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     @Override
@@ -317,6 +336,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                         if (id != null) contentUrl = source.getContentUrlTemplate().replace("{id}", id);
                     }
                     vo.setContentUrl(resolveUrl(source, contentUrl));
+                    sanitizeBookResult(vo, keyword);
                     if (vo.getTitle() != null && vo.getContentUrl() != null && matchesKeyword(vo, keyword)) {
                         result.add(vo);
                     }
@@ -370,12 +390,16 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 if (vo.getCoverUrl() == null) {
                     vo.setCoverUrl(resolveUrl(source, extractRule(item, nestedText(rule, "ruleSearch", "coverUrl", "cover"))));
                 }
+                if (vo.getCoverUrl() == null) {
+                    vo.setCoverUrl(resolveUrl(source, findImageUrl(item)));
+                }
                 String detailUrl = extractRule(item, firstText(rule, "ruleSearchNoteUrl", "ruleSearchBookUrl", "bookUrl", "detailUrl"));
                 if (detailUrl == null || detailUrl.isBlank()) {
                     detailUrl = extractRule(item, nestedText(rule, "ruleSearch", "bookUrl", "detailUrl", "url"));
                 }
                 if (detailUrl == null || detailUrl.isBlank()) detailUrl = item.hasAttr("href") ? item.absUrl("href") : null;
                 vo.setContentUrl(resolveUrl(source, detailUrl));
+                sanitizeBookResult(vo, keyword);
                 if (vo.getTitle() != null && vo.getContentUrl() != null && matchesKeyword(vo, keyword)) result.add(vo);
             }
             return result;
@@ -394,6 +418,44 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         return !containsAny(text, "高h", "ntr", "np", "sm", "调教", "淫", "情色", "成人", "肉文", "禁忌", "屌", "绿萧");
     }
 
+    private void sanitizeBookResult(SourceBookVO book, String keyword) {
+        if (book == null) return;
+        book.setTitle(cleanTextField(book.getTitle(), 120));
+        book.setAuthor(cleanAuthorField(book.getAuthor(), book.getTitle(), keyword));
+        book.setDescription(cleanTextField(book.getDescription(), 260));
+        book.setCoverUrl(cleanTextField(book.getCoverUrl(), 1000));
+        book.setContentUrl(cleanTextField(book.getContentUrl(), 1000));
+    }
+
+    private String cleanAuthorField(String author, String title, String keyword) {
+        String cleaned = cleanTextField(author, 80);
+        if (cleaned == null || cleaned.isBlank()) return null;
+        String titleText = title == null ? "" : title;
+        String keywordText = keyword == null ? "" : keyword;
+        if (cleaned.length() > 36 && (cleaned.contains(titleText) || cleaned.contains(keywordText)
+                || cleaned.matches(".*(简介|推荐度|连载|完结|章节|万字|第\\s*\\d+).*"))) {
+            return null;
+        }
+        return cleaned;
+    }
+
+    private String cleanTextField(String value, int maxLength) {
+        if (value == null) return null;
+        String cleaned = value.replaceAll("\\s+", " ").trim();
+        if (cleaned.isEmpty()) return null;
+        return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength);
+    }
+
+    private String findImageUrl(Element item) {
+        Element image = item == null ? null : item.selectFirst("img");
+        if (image == null) return null;
+        for (String attr : List.of("data-src", "data-original", "data-lazy-src", "src")) {
+            String value = image.hasAttr(attr) ? image.attr(attr) : null;
+            if (value != null && !value.isBlank()) return value.trim();
+        }
+        return null;
+    }
+
     private boolean isSearchCandidate(BookSource source) {
         if (source == null || source.getEnabled() == null || source.getEnabled() == 0) return false;
         String ruleConfig = source.getRuleConfig();
@@ -408,6 +470,9 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 }
                 JsonNode type = rule.get("bookSourceType");
                 if (type != null && type.isNumber() && type.asInt() == 2) return false;
+                String chapterList = nestedText(rule, "ruleToc", "chapterList", "list");
+                String contentRule = nestedText(rule, "ruleContent", "content", "body");
+                if (isUnsupportedRule(chapterList) || isUnsupportedRule(contentRule)) return false;
             } catch (IOException ignored) {
                 return false;
             }
@@ -444,11 +509,23 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         if (searchUrl == null || searchUrl.isBlank()) return true;
         String value = searchUrl.trim();
         return value.startsWith("@js")
+                || value.startsWith("js:")
                 || value.startsWith("<js>")
+                || value.contains("java.")
                 || value.contains("java.startBrowser")
                 || value.contains("\"webView\"")
                 || value.contains("{\"method\":\"POST\"")
                 || value.contains(",{");
+    }
+
+    private boolean isUnsupportedRule(String rule) {
+        if (rule == null || rule.isBlank()) return false;
+        String value = rule.trim();
+        return value.startsWith("@js")
+                || value.startsWith("js:")
+                || value.startsWith("<js>")
+                || value.contains("java.")
+                || value.contains("function(");
     }
 
     private String cleanLegadoUrl(String url) {
@@ -473,24 +550,76 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 || source.getRuleConfig().isBlank()) {
             return fetchText(uri);
         }
-        String body = fetchText(uri);
-        if (!body.trim().startsWith("<")) return body;
         try {
             JsonNode rule = objectMapper.readTree(source.getRuleConfig());
-            Document document = Jsoup.parse(body, uri.toString());
-            String contentRule = firstText(rule, "ruleContentContent", "ruleBookContent", "contentRule", "content");
-            if (contentRule == null) contentRule = nestedText(rule, "ruleContent", "content", "body");
-            String content = extractRule(document, contentRule);
-            if (content == null || content.isBlank()) {
-                content = document.select("article, .content, #content, .chapter, .chapter-content, .read-content").text();
+            String detailBody = fetchText(uri);
+            if (!detailBody.trim().startsWith("<")) return detailBody;
+
+            Document detailDocument = Jsoup.parse(detailBody, uri.toString());
+            String tocUrl = extractRule(detailDocument, nestedText(rule, "ruleBookInfo", "tocUrl"));
+            URI tocUri = uri;
+            Document tocDocument = detailDocument;
+            if (tocUrl != null && !tocUrl.isBlank()) {
+                tocUri = validateHttpUrl(resolveUrl(source, tocUrl));
+                String tocBody = fetchText(tocUri);
+                if (tocBody.trim().startsWith("<")) {
+                    tocDocument = Jsoup.parse(tocBody, tocUri.toString());
+                }
             }
-            if (content == null || content.isBlank()) {
+
+            String chapterListRule = nestedText(rule, "ruleToc", "chapterList", "list");
+            Elements chapterItems = selectElements(tocDocument, chapterListRule);
+            if (chapterItems.isEmpty()) {
+                chapterItems = tocDocument.select(".chapter-list a, .catalog a, .chapter a, #list a, .listmain a, a[href]");
+            }
+
+            StringBuilder bookContent = new StringBuilder();
+            int limit = Math.min(chapterItems.size(), 80);
+            for (int i = 0; i < limit; i++) {
+                Element item = chapterItems.get(i);
+                String chapterName = extractRule(item, nestedText(rule, "ruleToc", "chapterName", "name", "title"));
+                if (chapterName == null || chapterName.isBlank()) chapterName = item.text();
+                String chapterUrl = extractRule(item, nestedText(rule, "ruleToc", "chapterUrl", "url", "href"));
+                if (chapterUrl == null || chapterUrl.isBlank()) chapterUrl = item.hasAttr("href") ? item.absUrl("href") : null;
+                chapterUrl = resolveUrl(source, chapterUrl);
+                if (chapterUrl == null || chapterUrl.isBlank()) continue;
+                try {
+                    String chapterBody = fetchText(validateHttpUrl(chapterUrl));
+                    String chapterContent = extractChapterContent(rule, chapterBody, chapterUrl);
+                    if (chapterContent == null || chapterContent.isBlank()) continue;
+                    bookContent.append(chapterName != null && !chapterName.isBlank() ? chapterName.trim() : "第 " + (i + 1) + " 章")
+                            .append('\n')
+                            .append(chapterContent.trim())
+                            .append("\n\n");
+                } catch (RuntimeException ignored) {
+                    // 单章失败时继续尝试下一章
+                }
+            }
+
+            if (!bookContent.isEmpty()) return bookContent.toString();
+
+            String directContent = extractChapterContent(rule, detailBody, uri.toString());
+            if (directContent == null || directContent.isBlank()) {
                 throw new RuntimeException("规则型书源未解析到正文");
             }
-            return content.replaceAll("(?<=[。！？!?])\\s+", "\n");
+            return directContent;
         } catch (IOException e) {
             throw new RuntimeException("规则型书源配置无法解析");
         }
+    }
+
+    private String extractChapterContent(JsonNode rule, String body, String url) {
+        if (body == null || body.isBlank()) return null;
+        if (!body.trim().startsWith("<")) return body;
+        Document document = Jsoup.parse(body, url);
+        String contentRule = firstText(rule, "ruleContentContent", "ruleBookContent", "contentRule", "content");
+        if (contentRule == null) contentRule = nestedText(rule, "ruleContent", "content", "body");
+        String content = extractRule(document, contentRule);
+        if (content == null || content.isBlank()) {
+            content = document.select("article, .content, #content, .chapter, .chapter-content, .read-content, .chapter_content_box").text();
+        }
+        if (content == null || content.isBlank()) return null;
+        return content.replaceAll("(?<=[。！？!?])\\s+", "\n");
     }
 
     private BookSource getUserSource(Integer userId, Integer sourceId) {
@@ -706,6 +835,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     private Elements selectElements(Element root, String rule) {
         Elements current = new Elements(root);
         if (rule == null || rule.isBlank()) return current;
+        if (isUnsupportedRule(rule)) return new Elements();
         for (String part : rule.split("@")) {
             String token = part.trim();
             if (token.isEmpty() || isAttrToken(token)) continue;
@@ -721,6 +851,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
 
     private String extractRule(Element root, String rule) {
         if (rule == null || rule.isBlank()) return null;
+        if (isUnsupportedRule(rule)) return null;
         String[] parts = rule.split("@");
         String attr = "text";
         StringBuilder selector = new StringBuilder();
@@ -760,7 +891,8 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 value = element.absUrl("src");
                 break;
             default:
-                value = element.hasAttr(attr) ? element.attr(attr) : element.text();
+                String attrName = attr.startsWith("attr.") ? attr.substring(5) : attr;
+                value = element.hasAttr(attrName) ? element.attr(attrName) : element.text();
                 break;
         }
         return value != null && !value.isBlank() ? value.trim() : null;
