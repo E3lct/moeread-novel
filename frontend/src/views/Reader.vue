@@ -22,7 +22,7 @@
     <div class="reader-body">
       <!-- 侧边目录 -->
       <div class="reader-toc" :class="{ collapsed: tocCollapsed }">
-        <div class="toc-scroll">
+        <div class="toc-scroll" ref="tocScroll">
           <div class="toc-header">目录 ({{ chapters.length }})</div>
           <div class="toc-list">
             <div
@@ -134,6 +134,7 @@ const currentChapter = ref({ title: '', content: '' })
 const tocCollapsed = ref(false)
 const settingsOpen = ref(false)
 const contentWrap = ref(null)
+const tocScroll = ref(null)
 const loadingChapter = ref(false)
 const chapterError = ref('')
 const paragraphLimit = ref(520)
@@ -160,6 +161,7 @@ async function loadChapter(index) {
   if (index < 0 || index >= chapters.value.length) return
   const seq = ++loadSeq
   currentChapterIndex.value = index
+  scrollTocToCurrent()
   const ch = chapters.value[index]
   loadingChapter.value = true
   chapterError.value = ''
@@ -171,6 +173,7 @@ async function loadChapter(index) {
     currentChapter.value = res.data || ch
     await nextTick()
     if (contentWrap.value) contentWrap.value.scrollTop = 0
+    scrollTocToCurrent()
     saveCurrentProgress()
   } catch (e) {
     console.error('加载章节失败:', e)
@@ -184,6 +187,14 @@ async function loadChapter(index) {
 
 function goToChapter(index) {
   loadChapter(index)
+}
+
+async function scrollTocToCurrent() {
+  await nextTick()
+  if (!tocScroll.value || tocCollapsed.value) return
+  const active = tocScroll.value.querySelector('.toc-item.active')
+  if (!active) return
+  active.scrollIntoView({ block: 'center', inline: 'nearest' })
 }
 
 async function saveCurrentProgress() {
@@ -210,6 +221,10 @@ function handleKeydown(e) {
 watch(fontSize, (v) => readerStore.setFontSize(v))
 watch(lineHeight, (v) => readerStore.setLineHeight(v))
 watch(theme, (v) => readerStore.setTheme(v))
+watch(currentChapterIndex, () => scrollTocToCurrent())
+watch(tocCollapsed, (collapsed) => {
+  if (!collapsed) scrollTocToCurrent()
+})
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)

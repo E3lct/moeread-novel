@@ -282,13 +282,15 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             throw new RuntimeException("请输入搜索关键词");
         }
         List<BookSource> targets;
+        List<BookSource> enabledTargets = null;
+        boolean searchAllSources = sourceId == null || sourceId <= 0;
         if (sourceId != null && sourceId > 0) {
             targets = List.of(getUserSource(userId, sourceId));
         } else {
-            targets = list(new LambdaQueryWrapper<BookSource>()
+            enabledTargets = list(new LambdaQueryWrapper<BookSource>()
                     .eq(BookSource::getUserId, userId)
                     .eq(BookSource::getEnabled, 1));
-            targets = targets.stream()
+            targets = enabledTargets.stream()
                     .filter(this::isSearchCandidate)
                     .sorted((left, right) -> Integer.compare(searchPriority(right), searchPriority(left)))
                     .limit(8)
@@ -307,6 +309,26 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 if (result.size() >= 40) break;
             } catch (RuntimeException ignored) {
                 // 一个书源失败时继续搜索其他书源
+            }
+        }
+        if (result.isEmpty() && searchAllSources && enabledTargets != null) {
+            List<BookSource> fallbackTargets = enabledTargets.stream()
+                    .filter(this::isFallbackSearchCandidate)
+                    .sorted((left, right) -> Integer.compare(searchPriority(right), searchPriority(left)))
+                    .limit(16)
+                    .toList();
+            for (BookSource source : fallbackTargets) {
+                try {
+                    if ("rule_source".equals(source.getSourceType())) {
+                        result.addAll(searchRuleSource(source, keyword.trim()));
+                    } else {
+                        if (source.getSearchUrl() == null || source.getSearchUrl().isBlank()) continue;
+                        result.addAll(searchOneSource(source, keyword.trim()));
+                    }
+                    if (result.size() >= 40) break;
+                } catch (RuntimeException ignored) {
+                    // 回退搜索同样跳过失败书源
+                }
             }
         }
         return result;
@@ -485,6 +507,28 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 + (source.getDescription() == null ? "" : source.getDescription()) + " "
                 + (source.getBaseUrl() == null ? "" : source.getBaseUrl())).toLowerCase();
         return !containsAny(text, "漫画", "动漫", "视频", "短剧", "成人", "韩漫", "绅士", "gay", "腐漫", "搬山人",
+                "bbqqgg", "66story", "wnacg", "禁下载", "人机验证", "网页登录", "卡密", "购买");
+    }
+
+    private boolean isFallbackSearchCandidate(BookSource source) {
+        if (source == null || source.getEnabled() == null || source.getEnabled() == 0) return false;
+        String searchUrl = source.getSearchUrl();
+        if ((searchUrl == null || searchUrl.isBlank()) && source.getRuleConfig() != null && !source.getRuleConfig().isBlank()) {
+            try {
+                JsonNode rule = objectMapper.readTree(source.getRuleConfig());
+                searchUrl = firstText(rule, "ruleSearchUrl", "searchUrl");
+                if (searchUrl == null || searchUrl.isBlank()) searchUrl = nestedText(rule, "ruleSearch", "searchUrl", "url");
+                JsonNode type = rule.get("bookSourceType");
+                if (type != null && type.isNumber() && type.asInt() == 2) return false;
+            } catch (IOException ignored) {
+                return false;
+            }
+        }
+        if (searchUrl == null || searchUrl.isBlank() || isUnsupportedSearchUrl(searchUrl)) return false;
+        String text = ((source.getName() == null ? "" : source.getName()) + " "
+                + (source.getDescription() == null ? "" : source.getDescription()) + " "
+                + (source.getBaseUrl() == null ? "" : source.getBaseUrl())).toLowerCase();
+        return !containsAny(text, "漫画", "动漫", "视频", "短剧", "成人", "韩漫", "绅士", "gay", "腐漫",
                 "bbqqgg", "66story", "wnacg", "禁下载", "人机验证", "网页登录", "卡密", "购买");
     }
 
