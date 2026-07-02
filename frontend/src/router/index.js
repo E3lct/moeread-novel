@@ -60,7 +60,13 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash, top: 16, behavior: 'smooth' }
+    if (to.fullPath !== from.fullPath) return { top: 0, left: 0 }
+    return false
+  }
 })
 
 // 路由守卫
