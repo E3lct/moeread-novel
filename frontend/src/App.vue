@@ -10,7 +10,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useUserStore } from './stores/user'
 
 const userStore = useUserStore()
@@ -18,7 +18,7 @@ const userStore = useUserStore()
 const bgStyle = computed(() => {
   const img = userStore.userInfo?.mascotImage
   if (!img) return {}
-  const url = img.startsWith('http') ? img : '/api' + img
+  const url = img.startsWith('http') || img.startsWith('data:') ? img : '/api' + img
   const opacity = Math.min((userStore.userInfo?.mascotOpacity ?? 100) / 100, 1)
   const scale = userStore.userInfo?.bgScale ?? 100
   const mirror = userStore.userInfo?.bgMirror
@@ -31,12 +31,21 @@ const bgStyle = computed(() => {
 })
 
 onMounted(async () => {
-  if (userStore.token && !userStore.userInfo?.mascotImage) {
+  if (userStore.token) {
     try {
       await userStore.fetchProfile()
     } catch (e) {
       // token 可能过期，忽略
     }
+  }
+})
+
+watch(() => userStore.token, async (token) => {
+  if (!token) return
+  try {
+    await userStore.fetchProfile()
+  } catch (e) {
+    // token 可能过期，忽略
   }
 })
 </script>

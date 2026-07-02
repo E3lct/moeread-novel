@@ -20,6 +20,11 @@ export const useUserStore = defineStore('user', () => {
     }
     localStorage.setItem('token', token.value)
     localStorage.setItem('user', JSON.stringify(userInfo.value))
+    try {
+      await fetchProfile()
+    } catch (e) {
+      // 登录主流程已成功，资料同步失败时稍后 App 会再尝试
+    }
   }
 
   async function register(username, password) {
@@ -42,6 +47,7 @@ export const useUserStore = defineStore('user', () => {
   // 实时预览背景设置（不调API，只更新本地状态）
   function updateBgPreview(data) {
     userInfo.value = { ...userInfo.value, ...data }
+    localStorage.setItem('user', JSON.stringify(userInfo.value))
   }
 
   function logout() {

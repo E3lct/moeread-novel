@@ -1,6 +1,15 @@
 <template>
-  <div class="book-card" @click="goReader">
+  <div class="book-card" :class="{ selectable, selected }" @click="handleCardClick">
     <div class="book-cover" :class="coverClass" :style="coverStyle">
+      <button
+        v-if="selectable"
+        class="book-select-btn"
+        :class="{ selected }"
+        @click.stop="$emit('toggle-select', book)"
+      >
+        <svg v-if="selected" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      </button>
+
       <!-- 封面标题 (有自定义封面图时不显示文字) -->
       <div class="book-cover-title" v-if="!book.coverImagePath">{{ book.title }}</div>
 
@@ -42,10 +51,12 @@ import { useRouter } from 'vue-router'
 import ProgressRing from './ProgressRing.vue'
 
 const props = defineProps({
-  book: { type: Object, required: true }
+  book: { type: Object, required: true },
+  selectable: { type: Boolean, default: false },
+  selected: { type: Boolean, default: false }
 })
 
-defineEmits(['edit', 'toggle-favorite'])
+const emit = defineEmits(['edit', 'toggle-favorite', 'toggle-select'])
 
 const router = useRouter()
 
@@ -71,6 +82,14 @@ const coverStyle = computed(() => {
 function goReader() {
   router.push(`/reader/${props.book.id}`)
 }
+
+function handleCardClick() {
+  if (props.selectable) {
+    emit('toggle-select', props.book)
+    return
+  }
+  goReader()
+}
 </script>
 
 <style scoped>
@@ -86,6 +105,18 @@ function goReader() {
 .book-card:hover {
     transform: translateY(-4px) scale(1.02);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.book-card.selectable {
+    cursor: default;
+}
+
+.book-card.selectable:hover {
+    transform: none;
+}
+
+.book-card.selected {
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.28), 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
 .book-cover {
@@ -249,8 +280,42 @@ function goReader() {
     transform: scale(1);
 }
 
+.book-card.selectable .book-edit-btn {
+    display: none;
+}
+
 .book-edit-btn:hover {
     background: #fff;
     color: var(--color-primary-darker);
+}
+
+.book-select-btn {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.82);
+    border-radius: 50%;
+    color: #fff;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+}
+
+.book-select-btn.selected {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.book-select-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
 }
 </style>

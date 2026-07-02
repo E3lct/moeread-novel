@@ -37,11 +37,30 @@
           </button>
         </div>
 
+        <button
+          class="bookshelf-manage-btn"
+          :class="{ active: selectionMode }"
+          @click="toggleSelectionMode"
+        >
+          {{ selectionMode ? '取消' : '管理' }}
+        </button>
+
         <!-- 导入按钮 -->
-        <router-link to="/import" class="bookshelf-import-btn">
+        <router-link v-if="!selectionMode" to="/import" class="bookshelf-import-btn">
           <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           导入
         </router-link>
+      </div>
+    </div>
+
+    <div class="batch-bar" v-if="selectionMode">
+      <span>已选择 {{ selectedIds.size }} 本</span>
+      <div class="batch-actions">
+        <button class="batch-soft" @click="selectAllFiltered">全选当前</button>
+        <button class="batch-soft" @click="clearSelection">清空</button>
+        <button class="batch-danger" :disabled="!selectedIds.size || deletingBatch" @click="deleteSelectedBooks">
+          {{ deletingBatch ? '删除中' : '批量删除' }}
+        </button>
       </div>
     </div>
 
@@ -92,6 +111,9 @@
         :book="book"
         @edit="openEditModal"
         @toggle-favorite="toggleFavorite"
+        @toggle-select="toggleSelectBook"
+        :selectable="selectionMode"
+        :selected="selectedIds.has(book.id)"
       />
     </div>
 
@@ -109,6 +131,9 @@
             :book="book"
             @edit="openEditModal"
             @toggle-favorite="toggleFavorite"
+            @toggle-select="toggleSelectBook"
+            :selectable="selectionMode"
+            :selected="selectedIds.has(book.id)"
           />
         </div>
       </div>
@@ -222,6 +247,9 @@ const books = ref([])
 const searchQuery = ref('')
 const viewMode = ref('grid')
 const filter = ref('all')
+const selectionMode = ref(false)
+const selectedIds = ref(new Set())
+const deletingBatch = ref(false)
 
 const editModal = ref({
   open: false,
@@ -289,10 +317,50 @@ const coverPreviewStyle = computed(() => {
 })
 
 function openEditModal(book) {
+  if (selectionMode.value) return
   editModal.value = {
     open: true,
     book: { ...book, tags: [...(book.tags || [])] },
     newTag: ''
+  }
+}
+
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value
+  selectedIds.value = new Set()
+}
+
+function toggleSelectBook(book) {
+  const next = new Set(selectedIds.value)
+  if (next.has(book.id)) next.delete(book.id)
+  else next.add(book.id)
+  selectedIds.value = next
+}
+
+function selectAllFiltered() {
+  selectedIds.value = new Set(filteredBooks.value.map(book => book.id))
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+async function deleteSelectedBooks() {
+  const ids = Array.from(selectedIds.value)
+  if (!ids.length) return
+  if (!confirm(`确定删除选中的 ${ids.length} 本书吗？此操作不可恢复。`)) return
+  deletingBatch.value = true
+  try {
+    for (const id of ids) {
+      await apiDeleteBook(id)
+    }
+    books.value = books.value.filter(book => !selectedIds.value.has(book.id))
+    selectedIds.value = new Set()
+    selectionMode.value = false
+  } catch (e) {
+    alert('批量删除失败: ' + (e.message || ''))
+  } finally {
+    deletingBatch.value = false
   }
 }
 
@@ -370,6 +438,7 @@ async function deleteBook() {
 }
 
 async function toggleFavorite(book) {
+  if (selectionMode.value) return
   try {
     const next = Number(book.isFavorite) === 1 ? 0 : 1
     await updateBook(book.id, { isFavorite: next })
@@ -546,6 +615,77 @@ onMounted(async () => {
     width: 14px;
     height: 14px;
     fill: currentColor;
+}
+
+.bookshelf-manage-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px 13px;
+    border: 1px solid var(--color-border-neutral);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-md);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bookshelf-manage-btn:hover,
+.bookshelf-manage-btn.active {
+    background: var(--color-primary-pale);
+    color: var(--color-primary-darker);
+    border-color: rgba(217, 119, 6, 0.28);
+}
+
+.batch-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: -8px 0 22px;
+    padding: 10px 14px;
+    border: 1px solid rgba(217, 119, 6, 0.18);
+    border-radius: var(--radius-md);
+    background: rgba(255, 251, 235, 0.72);
+    color: var(--color-primary-darker);
+    font-size: var(--font-size-md);
+}
+
+.batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.batch-soft,
+.batch-danger {
+    min-height: 30px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.batch-soft {
+    border: 1px solid rgba(217, 119, 6, 0.18);
+    background: rgba(255, 255, 255, 0.68);
+    color: var(--color-primary-darker);
+}
+
+.batch-danger {
+    border: 1px solid #FCA5A5;
+    background: #FEF2F2;
+    color: #DC2626;
+}
+
+.batch-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 /* 筛选标签 */
