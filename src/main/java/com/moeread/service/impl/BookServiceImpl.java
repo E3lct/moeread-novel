@@ -42,7 +42,9 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         "^\\s*(正文)?\\s*第\\s*.{1,12}\\s*[章章节回]\\s*.*$",
         "^\\s*Chapter\\s+[0-9IVXLCDM]+\\b.*$",
         "^\\s*[0-9]{1,5}\\s*[.、．]\\s*\\S.*$",
-        "^\\s*[序楔尾后番外终][章声篇记]?.*$"
+        "^\\s*(前言|序言|序章|楔子|引子|正文|后记|尾声|终章|番外)(\\s*[:：].*)?$",
+        "^\\s*[序楔尾终][章声篇记]\\s*.*$",
+        "^\\s*(第\\s*)?[一二三四五六七八九十百千万0-9]{1,6}\\s*[节话篇]\\s*.*$"
     };
     private static final List<Pattern> CHAPTER_TITLE_PATTERNS = Arrays.stream(CHAPTER_PATTERNS)
             .map(Pattern::compile)
@@ -255,6 +257,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
                 .replace('\r', '\n')
                 .replace("\uFEFF", "");
         normalized = normalized.replaceAll("(?<!^)(?<!\\n)(第\\s*[0-9零〇一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]{1,8}\\s*[章章节回卷部集]\\s*[^\\n]{0,40})", "\n$1");
+        normalized = normalized.replaceAll("(?<!^)(?<!\\n)(前言|序言|序章|楔子|引子|正文|后记|尾声|终章|番外)(\\s*[:：])?(?=\\s*\\n)", "\n$1$2");
         String[] lines = normalized.split("\n");
         List<Chapter> chapters = new ArrayList<>();
 

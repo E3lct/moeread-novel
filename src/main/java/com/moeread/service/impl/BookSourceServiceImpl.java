@@ -12,6 +12,7 @@ import com.moeread.entity.BookSource;
 import com.moeread.mapper.BookSourceMapper;
 import com.moeread.service.BookService;
 import com.moeread.service.BookSourceService;
+import org.mozilla.universalchardet.UniversalDetector;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -20,6 +21,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -28,9 +31,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +43,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 @Service
 public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSource>
@@ -269,6 +280,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             if (!body.trim().startsWith("<")) return null;
             Document document = Jsoup.parse(body, uri.toString());
             String cover = extractRule(document, nestedText(rule, "ruleBookInfo", "coverUrl", "cover"));
+            if (cover == null || cover.isBlank()) cover = findMetaCover(document);
             if (cover == null || cover.isBlank()) cover = findImageUrl(document);
             return resolveUrl(source, cover);
         } catch (IOException | RuntimeException ignored) {
@@ -476,9 +488,36 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         if (image == null) return null;
         for (String attr : List.of("data-src", "data-original", "data-lazy-src", "src")) {
             String value = image.hasAttr(attr) ? image.attr(attr) : null;
+            if (value != null && isDecorativeImage(value)) continue;
             if (value != null && !value.isBlank()) return value.trim();
         }
         return null;
+    }
+
+    private String findMetaCover(Document document) {
+        if (document == null) return null;
+        for (String selector : List.of(
+                "meta[property=og:image]",
+                "meta[name=og:image]",
+                "meta[property='og:novel:image']",
+                "meta[name=cover]",
+                "meta[itemprop=image]"
+        )) {
+            Element meta = document.selectFirst(selector);
+            String value = meta == null ? null : meta.attr("content");
+            if (value != null && !value.isBlank() && !isDecorativeImage(value)) return value.trim();
+        }
+        return null;
+    }
+
+    private boolean isDecorativeImage(String value) {
+        if (value == null) return false;
+        String normalized = value.toLowerCase();
+        return normalized.contains("/assets/images/home")
+                || normalized.contains("/assets/images/search")
+                || normalized.contains("/assets/images/back")
+                || normalized.endsWith("/home.png")
+                || normalized.endsWith("/search.png");
     }
 
     private boolean isSearchCandidate(BookSource source) {
@@ -623,12 +662,14 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 String chapterName = extractRule(item, nestedText(rule, "ruleToc", "chapterName", "name", "title"));
                 if (chapterName == null || chapterName.isBlank()) chapterName = item.text();
                 String chapterUrl = extractRule(item, nestedText(rule, "ruleToc", "chapterUrl", "url", "href"));
-                if (chapterUrl == null || chapterUrl.isBlank()) chapterUrl = item.hasAttr("href") ? item.absUrl("href") : null;
+                if ((chapterUrl == null || chapterUrl.isBlank() || !chapterUrl.matches("(?i)^https?://.*"))
+                        && item.hasAttr("href")) {
+                    chapterUrl = item.absUrl("href");
+                }
                 chapterUrl = resolveUrl(source, chapterUrl);
                 if (chapterUrl == null || chapterUrl.isBlank()) continue;
                 try {
-                    String chapterBody = fetchText(validateHttpUrl(chapterUrl));
-                    String chapterContent = extractChapterContent(rule, chapterBody, chapterUrl);
+                    String chapterContent = fetchFullChapterContent(source, rule, chapterUrl);
                     if (chapterContent == null || chapterContent.isBlank()) continue;
                     bookContent.append(formatChapterTitle(i, chapterName))
                             .append('\n')
@@ -663,6 +704,9 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             visited.add(currentUri.toString());
             Elements pageItems = selectElements(currentDocument, chapterListRule);
             if (pageItems.isEmpty()) {
+                pageItems = extractObfuscatedChapterLinks(currentDocument, currentUri.toString());
+            }
+            if (pageItems.isEmpty()) {
                 pageItems = currentDocument.select(".chapter-list a, .catalog a, .chapter a, #list a, .listmain a, a[href]");
             }
             allItems.addAll(pageItems);
@@ -682,6 +726,28 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         return allItems;
     }
 
+    private String fetchFullChapterContent(BookSource source, JsonNode rule, String firstUrl) {
+        StringBuilder content = new StringBuilder();
+        Set<String> visited = new HashSet<>();
+        String currentUrl = firstUrl;
+        String nextRule = nestedText(rule, "ruleContent", "nextContentUrl", "nextUrl");
+        for (int page = 0; page < 8 && currentUrl != null && !currentUrl.isBlank() && !visited.contains(currentUrl); page++) {
+            visited.add(currentUrl);
+            String body = fetchText(validateHttpUrl(currentUrl));
+            String pageContent = extractChapterContent(rule, body, currentUrl);
+            if (pageContent != null && !pageContent.isBlank()) {
+                if (!content.isEmpty()) content.append("\n\n");
+                content.append(pageContent);
+            }
+            if (nextRule == null || nextRule.isBlank()) break;
+            if (!body.trim().startsWith("<")) break;
+            Document document = Jsoup.parse(body, currentUrl);
+            String nextUrl = extractRule(document, nextRule);
+            currentUrl = resolveUrl(source, nextUrl);
+        }
+        return content.toString();
+    }
+
     private String extractChapterContent(JsonNode rule, String body, String url) {
         if (body == null || body.isBlank()) return null;
         if (!body.trim().startsWith("<")) return body;
@@ -689,8 +755,12 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         String contentRule = firstText(rule, "ruleContentContent", "ruleBookContent", "contentRule", "content");
         if (contentRule == null) contentRule = nestedText(rule, "ruleContent", "content", "body");
         String content = extractRule(document, contentRule);
+        if ((content == null || content.isBlank()) && isUnsupportedRule(contentRule)) {
+            content = decryptLong4Content(body);
+        }
         if (content == null || content.isBlank()) {
-            content = document.select("article, .content, #content, .chapter, .chapter-content, .read-content, .chapter_content_box").text();
+            Element contentElement = document.selectFirst("article, .content, #content, .chapter, .chapter-content, .read-content, .chapter_content_box, .RBGsectionThree-content");
+            content = contentElement == null ? null : htmlToReadableText(contentElement);
         }
         if (content == null || content.isBlank()) return null;
         return cleanChapterText(content);
@@ -717,10 +787,107 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         }
         return text
                 .replace('\u00A0', ' ')
+                .replaceAll("(?m)^\\s*(Loading\\.\\.\\.|未加载完.*|尝试更换.*|移动流量偶尔打不开.*|收藏网址[:：]?.*|\\(＞人＜；\\))\\s*$", "")
                 .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
                 .replaceAll("(?<=[。！？!?])\\s+", "\n")
                 .replaceAll("\\n{3,}", "\n\n")
                 .trim();
+    }
+
+    private String htmlToReadableText(Element element) {
+        if (element == null) return null;
+        Document clone = Jsoup.parse(element.outerHtml());
+        clone.select("script, style, noscript, iframe, svg, canvas, form, button, input, select, textarea").remove();
+        clone.select("br").append("\\n");
+        clone.select("p, div, li, section, article, h1, h2, h3, h4").append("\\n");
+        return clone.text().replace("\\n", "\n");
+    }
+
+    private Elements extractObfuscatedChapterLinks(Document document, String baseUrl) {
+        Elements links = new Elements();
+        if (document == null) return links;
+        Matcher matcher = Pattern.compile("data-kiki=\"([^\"]+)\"[\\s\\S]*?data-bubu=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE)
+                .matcher(document.html());
+        Document synthetic = Document.createShell(baseUrl);
+        while (matcher.find() && links.size() < 300) {
+            String name = cleanChapterText(matcher.group(1));
+            String href = decodeBase64Text(matcher.group(2));
+            if (href == null || href.isBlank()) continue;
+            Element link = synthetic.createElement("a");
+            link.attr("href", href);
+            link.text(name == null || name.isBlank() ? "章节" : name);
+            links.add(link);
+        }
+        if (!links.isEmpty()) return links;
+
+        for (Element anchor : document.select("a[href][class*=g], .BCsectionTwo-top a[href], a[data-id], a[href][data-c]")) {
+            String href = null;
+            String name = null;
+            for (org.jsoup.nodes.Attribute attr : anchor.attributes()) {
+                String key = attr.getKey();
+                String value = attr.getValue();
+                if (!key.startsWith("data-") || value == null || value.isBlank()) continue;
+                String decoded = decodeBase64Text(value);
+                if (decoded != null && decoded.matches("(?i).*/book/.+\\.html$")) {
+                    href = decoded;
+                } else if (name == null && value.length() <= 80 && !value.matches("^[A-Za-z0-9+/=]+$")) {
+                    name = value;
+                }
+            }
+            if (href == null || href.isBlank()) continue;
+            Element link = synthetic.createElement("a");
+            link.attr("href", href);
+            link.text(cleanChapterText(name != null ? name : anchor.text()));
+            links.add(link);
+            if (links.size() >= 300) break;
+        }
+        return links;
+    }
+
+    private String decryptLong4Content(String html) {
+        Matcher matcher = Pattern.compile("d\\(\\\"([A-Za-z0-9+/=\\\\]+)\\\"\\s*,\\s*\\\"(b[0-9a-fA-F]+)\\\"\\s*\\)")
+                .matcher(html);
+        if (matcher.find()) {
+            String encoded = matcher.group(1).replace("\\/", "/");
+            String key = matcher.group(2);
+            String decrypted = aesBase64Decode(encoded, key);
+            if (decrypted != null && !decrypted.isBlank()) return cleanChapterText(decrypted);
+        }
+        Element fallback = Jsoup.parse(html).selectFirst("#RBGsectionThree-content, .RBGsectionThree-content");
+        return fallback == null ? null : htmlToReadableText(fallback);
+    }
+
+    private String decodeBase64Text(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8).trim();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String aesBase64Decode(String encoded, String key) {
+        try {
+            String md5 = md5Hex(key);
+            byte[] iv = md5.substring(0, 16).getBytes(StandardCharsets.UTF_8);
+            byte[] aesKey = md5.substring(16).getBytes(StandardCharsets.UTF_8);
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey, "AES"), new IvParameterSpec(iv));
+            byte[] decoded = Base64.getDecoder().decode(encoded);
+            return new String(cipher.doFinal(decoded), StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String md5Hex(String value) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("MD5");
+        byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder();
+        for (byte b : bytes) {
+            hex.append(String.format("%02x", b & 0xff));
+        }
+        return hex.toString();
     }
 
     private BookSource getUserSource(Integer userId, Integer sourceId) {
@@ -859,7 +1026,8 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 throw new RuntimeException("文本过大，请下载后使用本地导入");
             }
             Optional<String> contentType = response.headers().firstValue("Content-Type");
-            return decodeText(bytes, contentType.orElse(null));
+            Optional<String> contentEncoding = response.headers().firstValue("Content-Encoding");
+            return decodeText(decompressBody(bytes, contentEncoding.orElse(null)), contentType.orElse(null));
         } catch (IOException e) {
             throw new RuntimeException("无法连接书源: " + e.getMessage());
         } catch (InterruptedException e) {
@@ -873,6 +1041,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     }
 
     private String decodeText(byte[] bytes, String contentType) {
+        if (bytes == null || bytes.length == 0) return "";
         if (bytes.length >= 3
                 && (bytes[0] & 0xff) == 0xef
                 && (bytes[1] & 0xff) == 0xbb
@@ -891,11 +1060,57 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 // 继续使用兜底探测
             }
         }
+        charset = detectCharset(bytes);
+        if (charset != null && !charset.isBlank()) {
+            try {
+                return new String(bytes, Charset.forName(charset));
+            } catch (Exception ignored) {
+                // 继续使用 UTF-8/GB18030 兜底
+            }
+        }
         String utf8 = new String(bytes, StandardCharsets.UTF_8);
         if (utf8.indexOf('\uFFFD') >= 0) {
             return new String(bytes, Charset.forName("GB18030"));
         }
         return utf8;
+    }
+
+    private byte[] decompressBody(byte[] bytes, String contentEncoding) {
+        if (bytes == null || bytes.length == 0) return bytes;
+        String encoding = contentEncoding == null ? "" : contentEncoding.toLowerCase();
+        boolean gzip = encoding.contains("gzip")
+                || (bytes.length >= 2 && (bytes[0] & 0xff) == 0x1f && (bytes[1] & 0xff) == 0x8b);
+        boolean deflate = encoding.contains("deflate")
+                || (bytes.length >= 2 && (bytes[0] & 0xff) == 0x78
+                && ((bytes[1] & 0xff) == 0x01 || (bytes[1] & 0xff) == 0x5e
+                || (bytes[1] & 0xff) == 0x9c || (bytes[1] & 0xff) == 0xda));
+        if (!gzip && !deflate) return bytes;
+        try {
+            if (gzip) return readAllBytes(new GZIPInputStream(new ByteArrayInputStream(bytes)));
+            return readAllBytes(new InflaterInputStream(new ByteArrayInputStream(bytes)));
+        } catch (IOException ignored) {
+            return bytes;
+        }
+    }
+
+    private byte[] readAllBytes(java.io.InputStream input) throws IOException {
+        try (input; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private String detectCharset(byte[] bytes) {
+        UniversalDetector detector = new UniversalDetector(null);
+        detector.handleData(bytes, 0, bytes.length);
+        detector.dataEnd();
+        String charset = detector.getDetectedCharset();
+        detector.reset();
+        return charset;
     }
 
     private String extractCharset(String text) {
