@@ -4,6 +4,7 @@
     <main class="main-content app-main">
       <router-view />
     </main>
+    <div v-if="immersiveActive" class="immersive-water" aria-hidden="true"></div>
     <div v-if="rippleMode" class="water-ripple" aria-hidden="true"></div>
     <button
       v-if="immersiveActive"
@@ -70,11 +71,11 @@ function toggleImmersive() {
     pointer-events: none;
     overflow: hidden;
     background:
-        radial-gradient(circle at 50% 46px, rgba(255,255,255,0.52) 0 2px, transparent 3px),
+        radial-gradient(circle at 50% 46px, rgba(255,255,255,0.36) 0 2px, transparent 3px),
         repeating-radial-gradient(circle at 50% 46px,
             rgba(255,255,255,0) 0 44px,
-            rgba(255,255,255,0.42) 45px 47px,
-            rgba(47,93,80,0.10) 48px 50px,
+            rgba(255,255,255,0.22) 45px 47px,
+            rgba(47,93,80,0.06) 48px 50px,
             rgba(255,255,255,0) 52px 92px);
     opacity: 0;
     will-change: clip-path, opacity;
@@ -84,7 +85,7 @@ function toggleImmersive() {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at 50% 46px, rgba(255, 248, 226, 0.26), transparent 34%);
+    background: radial-gradient(circle at 50% 46px, rgba(255, 248, 226, 0.16), transparent 34%);
 }
 
 .app-layout.ripple-in .water-ripple {
@@ -105,13 +106,53 @@ function toggleImmersive() {
     cursor: default;
 }
 
+.immersive-water {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.42;
+    background:
+        radial-gradient(ellipse at 50% 18%, rgba(255,255,255,0.18), transparent 34%),
+        repeating-radial-gradient(ellipse at 50% 48%,
+            rgba(255,255,255,0) 0 56px,
+            rgba(255,255,255,0.14) 57px 58px,
+            rgba(47,93,80,0.045) 59px 60px,
+            rgba(255,255,255,0) 62px 112px);
+    background-size: 100% 100%, 118% 118%;
+    animation: waterDrift 9s ease-in-out infinite alternate;
+}
+
+.immersive-water::before,
+.immersive-water::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.34;
+    background:
+        linear-gradient(105deg,
+            transparent 0%,
+            rgba(255,255,255,0.10) 42%,
+            rgba(255,255,255,0.20) 50%,
+            rgba(255,255,255,0.08) 58%,
+            transparent 100%);
+    transform: translateX(-38%);
+    animation: waterSheen 8s ease-in-out infinite;
+}
+
+.immersive-water::after {
+    opacity: 0.18;
+    animation-duration: 11s;
+    animation-delay: -3s;
+}
+
 @keyframes rippleExpand {
     0% {
         opacity: 0;
         clip-path: circle(0 at 50% 46px);
     }
     24% {
-        opacity: 0.85;
+        opacity: 0.46;
     }
     100% {
         opacity: 0;
@@ -125,11 +166,29 @@ function toggleImmersive() {
         clip-path: circle(142vmax at 50% 46px);
     }
     24% {
-        opacity: 0.85;
+        opacity: 0.46;
     }
     100% {
         opacity: 0;
         clip-path: circle(0 at 50% 46px);
+    }
+}
+
+@keyframes waterDrift {
+    0% {
+        background-position: center, 48% 46%;
+    }
+    100% {
+        background-position: center, 52% 54%;
+    }
+}
+
+@keyframes waterSheen {
+    0%, 24% {
+        transform: translateX(-42%);
+    }
+    76%, 100% {
+        transform: translateX(42%);
     }
 }
 
@@ -139,11 +198,11 @@ function toggleImmersive() {
     }
     .water-ripple {
         background:
-            radial-gradient(circle at 36px 38px, rgba(255,255,255,0.52) 0 2px, transparent 3px),
+            radial-gradient(circle at 36px 38px, rgba(255,255,255,0.36) 0 2px, transparent 3px),
             repeating-radial-gradient(circle at 36px 38px,
                 rgba(255,255,255,0) 0 38px,
-                rgba(255,255,255,0.42) 39px 41px,
-                rgba(47,93,80,0.10) 42px 44px,
+                rgba(255,255,255,0.22) 39px 41px,
+                rgba(47,93,80,0.06) 42px 44px,
                 rgba(255,255,255,0) 46px 82px);
     }
 }
