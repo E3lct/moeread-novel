@@ -61,10 +61,10 @@ const avatarText = computed(() => {
     transform: translateX(-50%);
     width: min(1120px, calc(100vw - 36px));
     height: 58px;
-    background: rgba(255, 255, 255, 0.74);
-    backdrop-filter: blur(22px) saturate(160%);
-    -webkit-backdrop-filter: blur(22px) saturate(160%);
-    border: 1px solid rgba(232, 226, 214, 0.86);
+    background: rgba(255, 255, 255, 0.56);
+    backdrop-filter: blur(24px) saturate(170%);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.58);
     border-radius: 18px;
     box-shadow: 0 18px 45px rgba(61, 46, 26, 0.08);
     z-index: 1000;
@@ -160,7 +160,7 @@ const avatarText = computed(() => {
     padding: 10px;
     border-radius: 999px;
     transition: background 0.15s;
-    background: rgba(250, 248, 243, 0.78);
+    background: rgba(250, 248, 243, 0.52);
 }
 
 .navbar-user:hover {

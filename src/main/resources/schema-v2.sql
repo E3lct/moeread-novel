@@ -4,11 +4,11 @@ CREATE TABLE IF NOT EXISTS book_sources (
   name VARCHAR(100) NOT NULL,
   source_key VARCHAR(80) NOT NULL,
   source_type VARCHAR(40) NOT NULL DEFAULT 'custom',
-  base_url VARCHAR(500) DEFAULT '',
-  search_url VARCHAR(800) DEFAULT '',
-  content_url_template VARCHAR(800) DEFAULT '',
-  rule_config TEXT,
-  description VARCHAR(500) DEFAULT '',
+  base_url TEXT,
+  search_url TEXT,
+  content_url_template TEXT,
+  rule_config MEDIUMTEXT,
+  description TEXT,
   language VARCHAR(20) DEFAULT 'custom',
   enabled TINYINT DEFAULT 1,
   is_preset TINYINT DEFAULT 0,
@@ -41,6 +41,12 @@ SET @sql = (
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+ALTER TABLE book_sources MODIFY COLUMN base_url TEXT;
+ALTER TABLE book_sources MODIFY COLUMN search_url TEXT;
+ALTER TABLE book_sources MODIFY COLUMN content_url_template TEXT;
+ALTER TABLE book_sources MODIFY COLUMN rule_config MEDIUMTEXT;
+ALTER TABLE book_sources MODIFY COLUMN description TEXT;
 
 SET @sql = (
   SELECT IF(COUNT(*) = 0,

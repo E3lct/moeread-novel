@@ -65,10 +65,10 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                     "note", "同一书源的 CDN 分流地址，Raw 不通时可试这个。"
             ),
             Map.of(
-                    "name", "Yiove 书源仓库",
-                    "url", "https://shuyuan.yiove.com",
+                    "name", "Yiove 书源仓库 一键导入",
+                    "url", "https://shuyuan-api.yiove.com/import/book-sources/1-100",
                     "homepage", "https://shuyuan.yiove.com",
-                    "note", "综合书源仓库入口，会作为规则型书源入口保存。"
+                    "note", "直接导入 Yiove 当前前 100 个书源，和阅读 APP 的一键导入使用同类接口。"
             ),
             Map.of(
                     "name", "源仓库 YckCeo",
@@ -155,7 +155,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         if (url == null || url.isBlank()) {
             throw new RuntimeException("订阅地址不能为空");
         }
-        String subscribeUrl = url.trim();
+        String subscribeUrl = normalizeSubscribeUrl(url.trim());
         String body = fetchText(validateHttpUrl(subscribeUrl));
         if (body.trim().startsWith("<")) {
             String extractedUrl = extractSubscriptionUrl(body);
@@ -270,11 +270,11 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
 
         List<SourceBookVO> result = new ArrayList<>();
         for (BookSource source : targets) {
-            if (source.getSearchUrl() == null || source.getSearchUrl().isBlank()) continue;
             try {
                 if ("rule_source".equals(source.getSourceType())) {
                     result.addAll(searchRuleSource(source, keyword.trim()));
                 } else {
+                    if (source.getSearchUrl() == null || source.getSearchUrl().isBlank()) continue;
                     result.addAll(searchOneSource(source, keyword.trim()));
                 }
             } catch (RuntimeException ignored) {
@@ -333,8 +333,10 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             String url = searchUrl
                     .replace("{{key}}", encoded)
                     .replace("{{keyword}}", encoded)
+                    .replace("{{page}}", "1")
                     .replace("{keyword}", encoded)
-                    .replace("{key}", encoded);
+                    .replace("{key}", encoded)
+                    .replace("{page}", "1");
             url = resolveUrl(source, url);
             String html = fetchText(validateHttpUrl(url));
             Document document = Jsoup.parse(html, url);
@@ -353,10 +355,17 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                 if (vo.getTitle() == null) vo.setTitle(extractRule(item, nestedText(rule, "ruleSearch", "name", "bookName")));
                 if (vo.getTitle() == null) vo.setTitle(item.text());
                 vo.setAuthor(extractRule(item, firstText(rule, "ruleSearchAuthor", "author")));
-                if (vo.getAuthor() == null) vo.setAuthor(extractRule(item, nestedText(rule, "ruleSearch", "author")));
+                if (vo.getAuthor() == null) vo.setAuthor(extractRule(item, nestedText(rule, "ruleSearch", "author", "bookAuthor")));
                 vo.setDescription(extractRule(item, firstText(rule, "ruleSearchIntroduce", "ruleSearchDesc", "intro", "desc")));
+                if (vo.getDescription() == null) vo.setDescription(extractRule(item, nestedText(rule, "ruleSearch", "intro", "desc")));
                 vo.setCoverUrl(resolveUrl(source, extractRule(item, firstText(rule, "ruleSearchCoverUrl", "coverUrl", "cover"))));
+                if (vo.getCoverUrl() == null) {
+                    vo.setCoverUrl(resolveUrl(source, extractRule(item, nestedText(rule, "ruleSearch", "coverUrl", "cover"))));
+                }
                 String detailUrl = extractRule(item, firstText(rule, "ruleSearchNoteUrl", "ruleSearchBookUrl", "bookUrl", "detailUrl"));
+                if (detailUrl == null || detailUrl.isBlank()) {
+                    detailUrl = extractRule(item, nestedText(rule, "ruleSearch", "bookUrl", "detailUrl", "url"));
+                }
                 if (detailUrl == null || detailUrl.isBlank()) detailUrl = item.hasAttr("href") ? item.absUrl("href") : null;
                 vo.setContentUrl(resolveUrl(source, detailUrl));
                 if (vo.getTitle() != null && vo.getContentUrl() != null) result.add(vo);
@@ -365,6 +374,15 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         } catch (IOException e) {
             throw new RuntimeException("规则型书源配置无法解析");
         }
+    }
+
+    private String normalizeSubscribeUrl(String url) {
+        URI uri = validateHttpUrl(url);
+        String host = uri.getHost();
+        if (host != null && host.equalsIgnoreCase("shuyuan.yiove.com")) {
+            return "https://shuyuan-api.yiove.com/import/book-sources/1-100";
+        }
+        return url;
     }
 
     private String fetchSourceContent(BookSource source, URI uri) {
@@ -424,10 +442,15 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         BookSourceDTO dto = new BookSourceDTO();
         dto.setName(name != null ? name : "订阅书源 " + (index + 1));
         dto.setSourceKey("sub-" + Math.abs((subscribeUrl + "-" + index + "-" + dto.getName()).hashCode()));
-        dto.setSourceType(searchUrl != null && !searchUrl.isBlank() ? "json_api" : "rule_source");
+        boolean legadoRule = item.has("bookSourceName")
+                || item.has("bookSourceUrl")
+                || item.has("ruleSearchList")
+                || item.has("ruleBookInfo")
+                || item.has("ruleContent");
+        dto.setSourceType(legadoRule ? "rule_source" : (searchUrl != null && !searchUrl.isBlank() ? "json_api" : "rule_source"));
         dto.setBaseUrl(baseUrl != null ? baseUrl : "");
-        dto.setSearchUrl(searchUrl != null ? searchUrl : "");
-        dto.setContentUrlTemplate(contentUrlTemplate != null ? contentUrlTemplate : "");
+        dto.setSearchUrl(shortField(searchUrl));
+        dto.setContentUrlTemplate(shortField(contentUrlTemplate));
         dto.setRuleConfig(item.toString());
         dto.setDescription(text(item, "description", "desc", "sourceComment", "bookSourceComment", "comment"));
         dto.setLanguage(text(item, "language", "lang"));
@@ -440,6 +463,11 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         dto.setEnabled(enabled != null && enabled.isBoolean() ? (enabled.asBoolean() ? 1 : 0) : 1);
         dto.setIsPreset(0);
         return dto;
+    }
+
+    private String shortField(String value) {
+        if (value == null || value.isBlank()) return "";
+        return value.length() <= 760 ? value : "";
     }
 
     private String extractSubscriptionUrl(String html) {

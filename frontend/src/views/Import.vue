@@ -90,8 +90,8 @@
         <h2>订阅与添加书源</h2>
         <div class="subscription-box">
           <div class="subscription-head">
-            <strong>可信订阅入口</strong>
-            <span>导入前请确认书源合法性和可用性</span>
+            <strong>一键订阅书源</strong>
+            <span>订阅后会导入多个具体书源，再到“书源书城”搜索</span>
           </div>
           <div class="subscription-list">
             <button
