@@ -17,7 +17,7 @@ const bgStyle = computed(() => {
   const img = userStore.userInfo?.mascotImage
   if (!img) return {}
   const url = img.startsWith('http') ? img : '/api' + img
-  const opacity = (userStore.userInfo?.mascotOpacity ?? 80) / 100
+  const opacity = Math.min((userStore.userInfo?.mascotOpacity ?? 100) / 100, 1)
   const scale = userStore.userInfo?.bgScale ?? 100
   const mirror = userStore.userInfo?.bgMirror
   return {

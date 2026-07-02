@@ -306,7 +306,9 @@ async function downloadSourceBook(book) {
       sourceId: book.sourceId,
       title: book.title,
       author: book.author,
-      contentUrl: book.contentUrl
+      contentUrl: book.contentUrl,
+      coverUrl: book.coverUrl,
+      description: book.description
     })
     showResult(`《${res.data.title}》已下载到书架`)
   } catch (e) {

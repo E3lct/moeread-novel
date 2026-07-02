@@ -81,7 +81,7 @@
                 <div class="form-row">
                   <label class="form-label">透明度</label>
                   <div class="goal-slider-wrap">
-                    <input type="range" class="form-range" min="10" max="100" step="5" v-model.number="bgSettings.mascotOpacity"
+                    <input type="range" class="form-range" min="0" max="100" step="5" v-model.number="bgSettings.mascotOpacity"
                       @input="previewBg" @change="saveBg" />
                     <span class="goal-value">{{ bgSettings.mascotOpacity }}%</span>
                   </div>
@@ -249,7 +249,7 @@ const importHistory = ref([])
 
 const bgSettings = reactive({
   mascotImage: '',
-  mascotOpacity: 80,
+  mascotOpacity: 100,
   bgScale: 100,
   bgMirror: false
 })
@@ -377,19 +377,19 @@ async function saveBg() {
 
 async function removeBg() {
   bgSettings.mascotImage = ''
-  bgSettings.mascotOpacity = 80
+  bgSettings.mascotOpacity = 100
   bgSettings.bgScale = 100
   bgSettings.bgMirror = false
   userStore.updateBgPreview({
     mascotImage: '',
-    mascotOpacity: 80,
+    mascotOpacity: 100,
     bgScale: 100,
     bgMirror: false
   })
   try {
     await updateProfile({
       mascotImage: '',
-      mascotOpacity: 80,
+      mascotOpacity: 100,
       bgScale: 100,
       bgMirror: 0
     })
@@ -413,7 +413,7 @@ onMounted(async () => {
       profile.avatar = res.data.avatar || ''
       dailyGoal.value = res.data.dailyGoal || 30
       bgSettings.mascotImage = res.data.mascotImage || ''
-      bgSettings.mascotOpacity = res.data.mascotOpacity ?? 80
+      bgSettings.mascotOpacity = res.data.mascotOpacity ?? 100
       bgSettings.bgScale = res.data.bgScale ?? 100
       bgSettings.bgMirror = !!res.data.bgMirror
       userStore.updateBgPreview({

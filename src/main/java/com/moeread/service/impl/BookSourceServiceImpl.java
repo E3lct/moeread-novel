@@ -158,7 +158,18 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
         if (title == null || title.trim().isEmpty()) {
             title = deriveTitle(uri);
         }
-        return bookService.importTextContent(userId, title, dto.getAuthor(), content, "source:" + source.getSourceKey());
+        Book book = bookService.importTextContent(userId, title, dto.getAuthor(), content, "source:" + source.getSourceKey());
+        if (dto.getCoverUrl() != null && !dto.getCoverUrl().isBlank()) {
+            book.setCoverImagePath(dto.getCoverUrl().trim());
+        }
+        if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
+            book.setDescription(dto.getDescription().trim());
+        }
+        if ((book.getCoverImagePath() != null && !book.getCoverImagePath().isBlank())
+                || (book.getDescription() != null && !book.getDescription().isBlank())) {
+            bookService.updateById(book);
+        }
+        return book;
     }
 
     @Override

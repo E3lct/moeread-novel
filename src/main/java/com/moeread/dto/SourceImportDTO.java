@@ -8,4 +8,6 @@ public class SourceImportDTO {
     private String title;
     private String author;
     private String contentUrl;
+    private String coverUrl;
+    private String description;
 }
