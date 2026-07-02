@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSource>
@@ -44,6 +45,21 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
                     "", "", "", "支持搜索接口返回 JSON 数组，字段含 title/author/contentUrl。", "custom")
     );
 
+    private static final List<Map<String, String>> SUBSCRIPTIONS = List.of(
+            Map.of(
+                    "name", "XIU2/Yuedu 精品书源",
+                    "url", "https://yuedu.xiu2.xyz",
+                    "homepage", "https://github.com/XIU2/Yuedu",
+                    "note", "常见阅读书源分享仓库，部分为规则型书源，可能需要后续规则引擎支持。"
+            ),
+            Map.of(
+                    "name", "Yiove 书源仓库",
+                    "url", "https://shuyuan.yiove.com",
+                    "homepage", "https://shuyuan.yiove.com",
+                    "note", "综合书源仓库入口，建议自行确认来源后订阅。"
+            )
+    );
+
     private final BookService bookService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -58,6 +74,11 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     @Override
     public List<BookSourceDTO> listPresets() {
         return new ArrayList<>(PRESETS);
+    }
+
+    @Override
+    public List<Map<String, String>> listSubscriptions() {
+        return SUBSCRIPTIONS;
     }
 
     @Override
@@ -103,6 +124,36 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             result.add(addSource(userId, source));
         }
         return result;
+    }
+
+    @Override
+    public List<BookSourceDTO> subscribeSources(Integer userId, String url) {
+        if (url == null || url.isBlank()) {
+            throw new RuntimeException("订阅地址不能为空");
+        }
+        String body = fetchText(validateHttpUrl(url.trim()));
+        if (body.trim().startsWith("<")) {
+            throw new RuntimeException("订阅地址返回的是网页，请复制页面中的 JSON 书源文件地址再订阅");
+        }
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode listNode = findResultList(root);
+            if (listNode == null || !listNode.isArray()) {
+                throw new RuntimeException("没有找到可导入的书源列表");
+            }
+            List<BookSourceDTO> sources = new ArrayList<>();
+            int index = 0;
+            for (JsonNode item : listNode) {
+                BookSourceDTO dto = normalizeSource(item, url, index++);
+                if (dto != null) sources.add(dto);
+            }
+            if (sources.isEmpty()) {
+                throw new RuntimeException("订阅中没有可识别书源");
+            }
+            return addSources(userId, sources);
+        } catch (IOException e) {
+            throw new RuntimeException("订阅内容不是有效 JSON");
+        }
     }
 
     @Override
@@ -247,7 +298,7 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
     private JsonNode findResultList(JsonNode root) {
         if (root == null) return null;
         if (root.isArray()) return root;
-        for (String key : List.of("data", "books", "items", "list", "results")) {
+        for (String key : List.of("data", "books", "items", "list", "results", "sources", "bookSources")) {
             JsonNode node = root.get(key);
             if (node == null) continue;
             if (node.isArray()) return node;
@@ -255,6 +306,28 @@ public class BookSourceServiceImpl extends ServiceImpl<BookSourceMapper, BookSou
             if (nested != null) return nested;
         }
         return null;
+    }
+
+    private BookSourceDTO normalizeSource(JsonNode item, String subscribeUrl, int index) {
+        String name = text(item, "name", "sourceName", "bookSourceName");
+        String baseUrl = text(item, "baseUrl", "bookSourceUrl", "sourceUrl", "url");
+        String searchUrl = text(item, "searchUrl", "ruleSearchUrl", "search");
+        String contentUrlTemplate = text(item, "contentUrlTemplate", "contentUrl", "ruleContentUrl");
+        if ((name == null || name.isBlank()) && (baseUrl == null || baseUrl.isBlank())) return null;
+
+        BookSourceDTO dto = new BookSourceDTO();
+        dto.setName(name != null ? name : "订阅书源 " + (index + 1));
+        dto.setSourceKey("sub-" + Math.abs((subscribeUrl + "-" + index + "-" + dto.getName()).hashCode()));
+        dto.setSourceType(searchUrl != null && !searchUrl.isBlank() ? "json_api" : "rule_source");
+        dto.setBaseUrl(baseUrl != null ? baseUrl : "");
+        dto.setSearchUrl(searchUrl != null ? searchUrl : "");
+        dto.setContentUrlTemplate(contentUrlTemplate != null ? contentUrlTemplate : "");
+        dto.setDescription(text(item, "description", "desc", "bookSourceComment", "comment"));
+        dto.setLanguage(text(item, "language", "lang"));
+        if (dto.getLanguage() == null) dto.setLanguage("custom");
+        dto.setEnabled(1);
+        dto.setIsPreset(0);
+        return dto;
     }
 
     private String text(JsonNode node, String... keys) {

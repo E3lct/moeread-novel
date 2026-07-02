@@ -205,7 +205,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             }
             String filename = userId + "_" + System.currentTimeMillis() + ext;
             Path target = dir.resolve(filename);
-            file.transferTo(target.toFile());
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
             return "/uploads/covers/" + filename;
         } catch (IOException e) {
             throw new RuntimeException("封面上传失败: " + e.getMessage());

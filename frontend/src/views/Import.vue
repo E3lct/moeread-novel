@@ -84,7 +84,28 @@
 
     <section v-if="mode === 'sources'" class="sources-layout">
       <div class="glass-panel source-editor">
-        <h2>添加书源</h2>
+        <h2>订阅与添加书源</h2>
+        <div class="subscription-box">
+          <div class="subscription-head">
+            <strong>可信订阅入口</strong>
+            <span>导入前请确认书源合法性和可用性</span>
+          </div>
+          <div class="subscription-list">
+            <button
+              v-for="sub in subscriptions"
+              :key="sub.url"
+              class="subscription-card"
+              @click="subscribe(sub.url)"
+            >
+              <strong>{{ sub.name }}</strong>
+              <span>{{ sub.note }}</span>
+            </button>
+          </div>
+          <div class="subscribe-line">
+            <input v-model="subscribeUrl" placeholder="粘贴 JSON 书源订阅地址" />
+            <button class="soft-action" @click="subscribe(subscribeUrl)">订阅</button>
+          </div>
+        </div>
         <div class="editor-grid">
           <input v-model="customSource.name" placeholder="书源名称" />
           <input v-model="customSource.baseUrl" placeholder="基础地址，可选" />
@@ -139,9 +160,11 @@ import { importTxt, importZip } from '../api/book'
 import {
   addCustomSource,
   addSourceBatch,
+  getSourceSubscriptions,
   getSourceList,
   importFromSource,
   searchSourceBooks,
+  subscribeSource,
   updateSourceEnabled
 } from '../api/source'
 
@@ -155,9 +178,11 @@ const importResult = ref('')
 const importError = ref('')
 const fileInput = ref(null)
 const sources = ref([])
+const subscriptions = ref([])
 const keyword = ref('')
 const searchSourceId = ref(0)
 const searchResults = ref([])
+const subscribeUrl = ref('')
 
 const customSource = reactive({
   name: '',
@@ -220,6 +245,26 @@ async function doImport() {
 async function reloadSources() {
   const res = await getSourceList()
   sources.value = res.data || []
+}
+
+async function reloadSubscriptions() {
+  const res = await getSourceSubscriptions()
+  subscriptions.value = res.data || []
+}
+
+async function subscribe(url) {
+  if (!url || !url.trim()) {
+    showError('请输入订阅地址')
+    return
+  }
+  try {
+    const res = await subscribeSource(url.trim())
+    await reloadSources()
+    subscribeUrl.value = ''
+    showResult(`已订阅 ${res.data?.length || 0} 个书源`)
+  } catch (e) {
+    showError(e.message || '订阅失败')
+  }
 }
 
 async function addCustom() {
@@ -316,7 +361,9 @@ async function downloadSourceBook(book) {
   }
 }
 
-onMounted(reloadSources)
+onMounted(async () => {
+  await Promise.all([reloadSources(), reloadSubscriptions()])
+})
 </script>
 
 <style scoped>
@@ -443,7 +490,8 @@ onMounted(reloadSources)
 
 .search-strip input,
 .search-strip select,
-.editor-grid input {
+.editor-grid input,
+.subscribe-line input {
   width: 100%;
   border: 1px solid #ddd4c4;
   border-radius: 16px;
@@ -612,6 +660,61 @@ onMounted(reloadSources)
   gap: 10px;
 }
 
+.subscription-box {
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 250, 241, 0.78);
+  border: 1px solid #eee4d3;
+}
+
+.subscription-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #3f362b;
+}
+
+.subscription-head span {
+  color: #8a7b68;
+  font-size: 12px;
+}
+
+.subscription-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.subscription-card {
+  border: 1px solid #eadcc8;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.subscription-card strong,
+.subscription-card span {
+  display: block;
+}
+
+.subscription-card span {
+  margin-top: 4px;
+  color: #7b6e60;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.subscribe-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .editor-grid .wide {
   grid-column: 1 / -1;
 }
@@ -719,7 +822,8 @@ onMounted(reloadSources)
   }
   .search-strip,
   .sources-layout,
-  .editor-grid {
+  .editor-grid,
+  .subscribe-line {
     grid-template-columns: 1fr;
   }
   .source-hero h1 {

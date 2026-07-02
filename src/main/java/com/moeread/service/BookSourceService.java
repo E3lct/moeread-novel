@@ -12,11 +12,15 @@ import java.util.List;
 public interface BookSourceService extends IService<BookSource> {
     List<BookSourceDTO> listPresets();
 
+    List<java.util.Map<String, String>> listSubscriptions();
+
     List<BookSourceDTO> listUserSources(Integer userId);
 
     BookSourceDTO addSource(Integer userId, BookSourceDTO dto);
 
     List<BookSourceDTO> addSources(Integer userId, List<BookSourceDTO> sources);
+
+    List<BookSourceDTO> subscribeSources(Integer userId, String url);
 
     BookSourceDTO addPreset(Integer userId, String sourceKey);
 

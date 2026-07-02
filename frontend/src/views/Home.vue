@@ -1,122 +1,125 @@
 <template>
   <div class="home-page">
-    <section class="reading-desk">
-      <div class="desk-copy">
-        <span class="eyebrow">Reading Desk</span>
-        <h1>{{ greeting }}，{{ displayName }}</h1>
-        <p>把今天的章节轻轻续上，书架、进度和书源都在这里等你。</p>
-        <div class="desk-actions">
-          <button class="primary-btn" @click="openRecommend" :disabled="!recommendBook">继续阅读</button>
-          <router-link class="plain-btn" to="/import">导入新书</router-link>
+    <div class="home-content">
+      <!-- 顶部：今日阅读 + 推荐位 -->
+      <div class="home-top">
+        <!-- 今日阅读卡 -->
+        <div class="today-card">
+          <div class="today-card-inner">
+            <div class="today-header">
+              <span class="today-label">今日阅读</span>
+              <span class="today-goal">目标 {{ dailyGoal }} 分钟</span>
+            </div>
+            <div class="today-ring-wrap">
+              <div class="today-done-badge" v-if="todayMinutes >= dailyGoal">已达标</div>
+              <svg class="today-ring" width="120" height="120" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="7"/>
+                <circle
+                  cx="60" cy="60" r="50" fill="none"
+                  stroke="#fff" stroke-width="7"
+                  stroke-linecap="round"
+                  :stroke-dasharray="ringCircumference"
+                  :stroke-dashoffset="ringDashOffset"
+                  class="ring-progress"
+                  transform="rotate(-90 60 60)"
+                />
+                <text x="60" y="58" text-anchor="middle" fill="#fff" font-size="28" font-weight="700">
+                  {{ todayMinutes }}
+                </text>
+                <text x="60" y="76" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11">
+                  分钟
+                </text>
+              </svg>
+            </div>
+            <div class="today-footer">
+              连续打卡 <span class="streak-num">{{ streak }}</span> 天
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="desk-focus" v-if="recommendBook" @click="goReader(recommendBook)">
-        <div class="focus-cover" :class="coverClass(recommendBook)" :style="coverStyle(recommendBook)">
-          <span v-if="!hasCover(recommendBook)">{{ shortTitle(recommendBook.title) }}</span>
+        <!-- 推荐位 -->
+        <div class="recommend-card" v-if="recommendBook" @click="goReader(recommendBook)">
+          <div class="recommend-label">继续阅读</div>
+          <div class="recommend-body">
+            <div class="recommend-cover" :class="coverClass(recommendBook)" :style="coverStyle(recommendBook)">
+              <span class="recommend-cover-title" v-if="!hasCover(recommendBook)">{{ recommendBook.title }}</span>
+            </div>
+            <div class="recommend-info">
+              <div class="recommend-title">{{ recommendBook.title }}</div>
+              <div class="recommend-desc">{{ recommendBook.author || '未知作者' }} · {{ recommendBook.chapterCount || 0 }} 章</div>
+              <div class="recommend-meta">已读 {{ recommendBook.readProgress || 0 }}%</div>
+            </div>
+          </div>
         </div>
-        <div class="focus-info">
-          <span>继续阅读</span>
-          <strong>{{ recommendBook.title }}</strong>
-          <small>{{ recommendBook.author || '未知作者' }} · {{ recommendBook.chapterCount || 0 }} 章</small>
-          <div class="focus-progress">
-            <i :style="{ width: `${recommendBook.readProgress || 0}%` }"></i>
+        <div class="recommend-card recommend-empty" v-else>
+          <div class="recommend-empty-body">
+            <div class="recommend-empty-text">还没有书籍</div>
+            <div class="recommend-empty-hint">导入一本小说开始阅读吧</div>
+            <router-link to="/import" class="recommend-empty-btn">去导入</router-link>
           </div>
         </div>
       </div>
 
-      <div class="desk-focus empty-focus" v-else>
-        <div class="empty-mark">墨</div>
-        <div class="focus-info">
-          <span>书架还是空的</span>
-          <strong>先导入一本小说</strong>
-          <small>支持本地 TXT/ZIP，也支持 JSON 书源搜索下载。</small>
+      <!-- 最近在读 -->
+      <div class="home-section" v-if="recentBooks.length">
+        <div class="section-header">
+          <span class="section-title">最近在读</span>
+          <router-link to="/bookshelf" class="section-more">查看全部</router-link>
         </div>
-      </div>
-    </section>
-
-    <section class="stats-strip">
-      <article class="today-panel">
-        <div class="today-ring">
-          <svg width="108" height="108" viewBox="0 0 108 108">
-            <circle cx="54" cy="54" r="46" fill="none" stroke="rgba(53, 75, 67, 0.12)" stroke-width="8" />
-            <circle
-              cx="54"
-              cy="54"
-              r="46"
-              fill="none"
-              stroke="#2f5d50"
-              stroke-width="8"
-              stroke-linecap="round"
-              :stroke-dasharray="ringCircumference"
-              :stroke-dashoffset="ringDashOffset"
-              transform="rotate(-90 54 54)"
-            />
-          </svg>
-          <div>
-            <strong>{{ todayMinutes }}</strong>
-            <span>分钟</span>
+        <div class="book-row">
+          <div class="home-book" v-for="book in recentBooks" :key="book.id" @click="goReader(book)">
+            <div class="home-book-cover" :class="coverClass(book)" :style="coverStyle(book)">
+              <span class="home-book-cover-title" v-if="!hasCover(book)">{{ book.title }}</span>
+              <ProgressRing :percent="book.readProgress || 0" />
+            </div>
+            <div class="home-book-info">
+              <div class="home-book-title text-ellipsis">{{ book.title }}</div>
+              <div class="home-book-meta">{{ book.readProgress || 0 }}%</div>
+            </div>
           </div>
         </div>
-        <div class="today-copy">
-          <span>今日阅读</span>
-          <strong>{{ todayMinutes >= dailyGoal ? '已完成今日目标' : `目标 ${dailyGoal} 分钟` }}</strong>
-          <small>连续打卡 {{ streak }} 天</small>
-        </div>
-      </article>
-
-      <article class="mini-stat">
-        <span>书架藏书</span>
-        <strong>{{ books.length }}</strong>
-        <small>本书</small>
-      </article>
-      <article class="mini-stat">
-        <span>最近在读</span>
-        <strong>{{ recentBooks.length }}</strong>
-        <small>本进行中</small>
-      </article>
-      <article class="mini-stat">
-        <span>喜爱书籍</span>
-        <strong>{{ favoriteBooks.length }}</strong>
-        <small>本收藏</small>
-      </article>
-    </section>
-
-    <BookShelfRow
-      v-if="recentBooks.length"
-      title="最近在读"
-      :books="recentBooks"
-      @open="goReader"
-    />
-
-    <BookShelfRow
-      v-if="favoriteBooks.length"
-      title="喜爱书籍"
-      :books="favoriteBooks"
-      @open="goReader"
-    />
-
-    <section class="empty-guide" v-if="!recentBooks.length && !favoriteBooks.length">
-      <div>
-        <span>Start Library</span>
-        <h2>先放进第一本书</h2>
-        <p>可以直接上传本地小说，也可以添加开源 JSON 书源后搜索下载。</p>
       </div>
-      <router-link class="primary-btn" to="/import">去导入</router-link>
-    </section>
+
+      <!-- 喜爱书籍 -->
+      <div class="home-section" v-if="favoriteBooks.length">
+        <div class="section-header">
+          <span class="section-title">
+            <svg class="section-heart" viewBox="0 0 24 24"><path fill="#D97706" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            喜爱书籍
+          </span>
+          <router-link to="/bookshelf" class="section-more">查看全部</router-link>
+        </div>
+        <div class="book-row">
+          <div class="home-book" v-for="book in favoriteBooks" :key="book.id" @click="goReader(book)">
+            <div class="home-book-cover" :class="coverClass(book)" :style="coverStyle(book)">
+              <span class="home-book-cover-title" v-if="!hasCover(book)">{{ book.title }}</span>
+              <ProgressRing :percent="book.readProgress || 0" />
+            </div>
+            <div class="home-book-info">
+              <div class="home-book-title text-ellipsis">{{ book.title }}</div>
+              <div class="home-book-meta">{{ book.readProgress || 0 }}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 引导区（无书时） -->
+      <div class="home-guide" v-if="!recentBooks.length && !favoriteBooks.length">
+        <div class="guide-text">还没有书籍，导入一本小说开始阅读之旅吧</div>
+        <router-link to="/import" class="guide-btn">导入书籍</router-link>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getBookshelf } from '../api/book'
 import { getStatsOverview } from '../api/stats'
-import { useUserStore } from '../stores/user'
 import ProgressRing from '../components/ProgressRing.vue'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const books = ref([])
 const todayMinutes = ref(0)
@@ -124,30 +127,25 @@ const streak = ref(0)
 const dailyGoal = ref(30)
 
 const recentBooks = computed(() =>
-  books.value.filter(b => b.readProgress > 0).slice(0, 8)
+  books.value.filter(b => b.readProgress > 0).slice(0, 6)
 )
 
 const favoriteBooks = computed(() =>
-  books.value.filter(b => Number(b.isFavorite) === 1).slice(0, 8)
+      books.value.filter(b => Number(b.isFavorite) === 1).slice(0, 6)
 )
 
 const recommendBook = computed(() =>
   books.value.find(b => b.readProgress > 0 && b.readProgress < 100) || books.value[0] || null
 )
 
-const greeting = computed(() => {
-  const hour = new Date().getHours()
-  if (hour < 6) return '夜读愉快'
-  if (hour < 12) return '早上好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
-})
-
-const displayName = computed(() => userStore.userInfo?.nickname || userStore.username || '读者')
-const ringCircumference = 2 * Math.PI * 46
+const ringCircumference = 2 * Math.PI * 50
 const ringDashOffset = computed(() =>
-  ringCircumference * (1 - Math.min(todayMinutes.value / Math.max(dailyGoal.value, 1), 1))
+  ringCircumference * (1 - Math.min(todayMinutes.value / dailyGoal.value, 1))
 )
+
+function goReader(book) {
+  router.push(`/reader/${book.id}`)
+}
 
 function hasCover(book) {
   return !!book?.coverImagePath
@@ -168,48 +166,6 @@ function coverClass(book) {
   return hasCover(book) ? 'real-cover' : `cover-${((book?.id || 0) % 6) + 1}`
 }
 
-function shortTitle(title) {
-  return (title || '未命名').slice(0, 8)
-}
-
-function goReader(book) {
-  router.push(`/reader/${book.id}`)
-}
-
-function openRecommend() {
-  if (recommendBook.value) goReader(recommendBook.value)
-}
-
-const BookShelfRow = defineComponent({
-  name: 'BookShelfRow',
-  props: {
-    title: { type: String, required: true },
-    books: { type: Array, required: true }
-  },
-  emits: ['open'],
-  setup(props, { emit }) {
-    return () => h('section', { class: 'shelf-section' }, [
-      h('div', { class: 'section-header' }, [
-        h('h2', props.title),
-        h(RouterLink, { to: '/bookshelf', class: 'section-link' }, () => '查看全部')
-      ]),
-      h('div', { class: 'book-rail' }, props.books.map(book =>
-        h('article', { class: 'book-tile', key: book.id, onClick: () => emit('open', book) }, [
-          h('div', {
-            class: ['book-cover', hasCover(book) ? 'real-cover' : `cover-${((book.id || 0) % 6) + 1}`],
-            style: coverStyle(book)
-          }, [
-            !hasCover(book) ? h('span', shortTitle(book.title)) : null,
-            h(ProgressRing, { percent: book.readProgress || 0 })
-          ]),
-          h('strong', book.title),
-          h('small', `${book.readProgress || 0}% · ${book.author || '未知作者'}`)
-        ])
-      ))
-    ])
-  }
-})
-
 onMounted(async () => {
   try {
     const [bookRes, statsRes] = await Promise.all([
@@ -222,6 +178,7 @@ onMounted(async () => {
       streak.value = statsRes.data.streakDays || 0
       dailyGoal.value = statsRes.data.dailyGoal || 30
     }
+    if (statsRes.data.dailyGoal) dailyGoal.value = statsRes.data.dailyGoal
   } catch (e) {
     console.error('加载首页数据失败:', e)
   }
@@ -230,427 +187,386 @@ onMounted(async () => {
 
 <style scoped>
 .home-page {
-  min-height: calc(100vh - var(--nav-height));
-  padding-bottom: 48px;
-  color: #2c2720;
+    min-height: calc(100vh - var(--nav-height));
+    padding-bottom: 48px;
 }
 
-.reading-desk {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-  gap: 24px;
-  min-height: 320px;
-  padding: 34px;
-  border-radius: 26px;
-  background:
-    linear-gradient(135deg, rgba(40, 55, 50, 0.96), rgba(78, 63, 46, 0.86)),
-    radial-gradient(circle at 16% 15%, rgba(246, 225, 172, 0.25), transparent 34%),
-    linear-gradient(45deg, #243833, #866b49);
-  box-shadow: 0 28px 90px rgba(51, 43, 31, 0.18);
-  overflow: hidden;
-  position: relative;
+.home-content {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0;
 }
 
-.reading-desk::after {
-  content: '';
-  position: absolute;
-  width: 420px;
-  height: 420px;
-  right: -150px;
-  top: -170px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+/* 顶部 */
+.home-top {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 30px;
+    align-items: stretch;
 }
 
-.desk-copy,
-.desk-focus {
-  position: relative;
-  z-index: 1;
+/* 今日阅读卡 */
+.today-card {
+    width: 320px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      linear-gradient(145deg, rgba(251, 191, 36, 0.78) 0%, rgba(217, 119, 6, 0.82) 100%),
+      radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.34), transparent 36%);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow: 0 16px 38px rgba(217, 119, 6, 0.18);
+    backdrop-filter: blur(14px);
 }
 
-.desk-copy {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  color: #fffaf0;
+.today-card-inner {
+    padding: 24px 24px 20px;
+    color: #FFFFFF;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
-.eyebrow,
-.empty-guide span {
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 250, 240, 0.68);
+.today-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
 }
 
-.desk-copy h1 {
-  max-width: 620px;
-  margin: 10px 0 12px;
-  font-size: clamp(34px, 5vw, 58px);
-  line-height: 1.02;
-  letter-spacing: 0;
+.today-label {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
-.desk-copy p {
-  max-width: 520px;
-  margin: 0;
-  color: rgba(255, 250, 240, 0.72);
-  line-height: 1.8;
+.today-goal {
+    font-size: 12px;
+    opacity: 0.82;
 }
 
-.desk-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 28px;
-  flex-wrap: wrap;
+.today-ring-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    margin: 8px 0 4px;
+    flex: 1;
 }
 
-.primary-btn,
-.plain-btn {
-  border: 0;
-  border-radius: 999px;
-  padding: 11px 22px;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
+.ring-progress {
+    transition: stroke-dashoffset 1s ease-out;
 }
 
-.primary-btn {
-  color: #fff;
-  background: #2f5d50;
-  box-shadow: 0 12px 28px rgba(25, 55, 47, 0.28);
+.today-done-badge {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
 }
 
-.primary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.today-footer {
+    text-align: center;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
 }
 
-.plain-btn {
-  color: #2d4f45;
-  background: rgba(255, 250, 240, 0.88);
+.streak-num {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 2px;
 }
 
-.desk-focus {
-  align-self: end;
-  display: grid;
-  grid-template-columns: 122px minmax(0, 1fr);
-  gap: 18px;
-  align-items: end;
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 250, 240, 0.14);
-  border: 1px solid rgba(255, 250, 240, 0.22);
-  backdrop-filter: blur(18px);
-  cursor: pointer;
+/* 推荐位 */
+.recommend-card {
+    flex: 1;
+    border-radius: 14px;
+    background:
+      linear-gradient(140deg, rgba(255, 251, 235, 0.82) 0%, rgba(254, 243, 199, 0.56) 100%),
+      rgba(255, 255, 255, 0.46);
+    border: 1px solid rgba(253, 230, 138, 0.72);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    color: var(--color-text);
+    transition: box-shadow 0.2s, transform 0.2s;
+    min-height: 220px;
+    backdrop-filter: blur(16px);
 }
 
-.focus-cover,
-.book-cover {
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 18px 40px rgba(19, 21, 18, 0.28);
+.recommend-card:hover {
+    box-shadow: 0 18px 36px rgba(217, 119, 6, 0.14);
+    transform: translateY(-1px);
 }
 
-.focus-cover {
-  width: 122px;
-  height: 170px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
+.recommend-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-hint);
+    margin-bottom: 14px;
+    letter-spacing: 0.05em;
 }
 
-.focus-cover span,
-.book-cover span {
-  color: #fff;
-  font-weight: 800;
-  line-height: 1.45;
-  text-align: center;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+.recommend-body {
+    display: flex;
+    gap: 18px;
+    flex: 1;
+    align-items: center;
 }
 
-.focus-info {
-  min-width: 0;
-  color: #fffaf0;
+.recommend-cover {
+    width: 92px;
+    height: 124px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
 }
 
-.focus-info span,
-.today-copy span,
-.mini-stat span {
-  display: block;
-  font-size: 12px;
-  color: rgba(255, 250, 240, 0.66);
+.recommend-cover-title {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    word-break: break-all;
+    line-height: 1.4;
 }
 
-.focus-info strong {
-  display: block;
-  margin: 8px 0 8px;
-  font-size: 22px;
-  line-height: 1.22;
+.recommend-info {
+    flex: 1;
+    min-width: 0;
 }
 
-.focus-info small {
-  color: rgba(255, 250, 240, 0.7);
+.recommend-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 8px;
 }
 
-.focus-progress {
-  height: 7px;
-  margin-top: 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-  overflow: hidden;
+.recommend-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin-bottom: 12px;
 }
 
-.focus-progress i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #f6d889;
+.recommend-meta {
+    font-size: 12px;
+    color: var(--color-text-hint);
 }
 
-.empty-focus {
-  cursor: default;
+/* 推荐位空状态 */
+.recommend-empty {
+    justify-content: center;
 }
 
-.empty-mark {
-  width: 112px;
-  height: 112px;
-  border-radius: 28px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 250, 240, 0.88);
-  color: #2f5d50;
-  font-size: 42px;
-  font-weight: 900;
+.recommend-empty-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    text-align: center;
 }
 
-.stats-strip {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(150px, 1fr));
-  gap: 14px;
-  margin: 18px 0 34px;
+.recommend-empty-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 6px;
 }
 
-.today-panel,
-.mini-stat,
-.empty-guide {
-  border: 1px solid rgba(222, 213, 199, 0.9);
-  background: rgba(255, 253, 248, 0.84);
-  box-shadow: 0 18px 50px rgba(54, 45, 33, 0.08);
-  backdrop-filter: blur(14px);
+.recommend-empty-hint {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
 }
 
-.today-panel {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 18px;
-  border-radius: 22px;
+.recommend-empty-btn {
+    background: var(--color-primary);
+    color: #FFFFFF;
+    padding: 8px 24px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
 }
 
-.today-ring {
-  position: relative;
-  width: 108px;
-  height: 108px;
-  flex-shrink: 0;
+.recommend-empty-btn:hover {
+    background: var(--color-primary-dark);
+    color: #FFFFFF;
 }
 
-.today-ring div {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  align-content: center;
-}
-
-.today-ring strong {
-  font-size: 26px;
-  color: #2f5d50;
-}
-
-.today-ring span {
-  color: #8a7d6b;
-  font-size: 12px;
-}
-
-.today-copy span,
-.mini-stat span {
-  color: #837666;
-}
-
-.today-copy strong {
-  display: block;
-  margin: 5px 0;
-  font-size: 18px;
-}
-
-.today-copy small,
-.mini-stat small,
-.book-tile small {
-  color: #8b8072;
-}
-
-.mini-stat {
-  min-height: 132px;
-  padding: 20px;
-  border-radius: 22px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-.mini-stat strong {
-  margin: 8px 0 2px;
-  font-size: 36px;
-  line-height: 1;
-  color: #2f5d50;
-}
-
-.shelf-section {
-  margin-bottom: 34px;
+/* 书籍区域 */
+.home-section {
+    margin-bottom: 36px;
 }
 
 .section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
 }
 
-.section-header h2 {
-  margin: 0;
-  font-size: 21px;
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.section-link {
-  color: #6f7f77;
-  font-size: 13px;
+.section-heart {
+    width: 16px;
+    height: 16px;
 }
 
-.book-rail {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 142px;
-  gap: 18px;
-  overflow-x: auto;
-  padding: 2px 2px 12px;
+.section-more {
+    font-size: 13px;
+    color: var(--color-text-hint);
+    transition: color 0.15s;
 }
 
-.book-tile {
-  cursor: pointer;
-  min-width: 0;
+.section-more:hover {
+    color: var(--color-primary-dark);
 }
 
-.book-cover {
-  width: 142px;
-  height: 198px;
-  border-radius: 14px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14px;
-  overflow: hidden;
-  transition: transform 0.18s, box-shadow 0.18s;
+/* 横向书籍列表 */
+.book-row {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-behavior: smooth;
 }
 
-.book-tile:hover .book-cover {
-  transform: translateY(-3px);
-  box-shadow: 0 22px 50px rgba(19, 21, 18, 0.32);
+.home-book {
+    flex-shrink: 0;
+    width: 130px;
+    cursor: pointer;
+    color: var(--color-text);
+    transition: transform 0.15s;
 }
 
-.book-tile strong {
-  display: block;
-  margin: 10px 0 3px;
-  color: #2f2a22;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.home-book:hover {
+    transform: translateY(-2px);
 }
 
-.book-tile small {
-  display: block;
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.home-book-cover {
+    width: 130px;
+    height: 180px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    box-shadow: 0 10px 24px rgba(217, 119, 6, 0.13);
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+    background-size: cover;
+    background-position: center;
 }
 
-.book-cover :deep(.book-progress-ring) {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.18s;
+.home-book:hover .home-book-cover {
+    box-shadow: 0 18px 34px rgba(217, 119, 6, 0.22);
 }
 
-.book-tile:hover .book-cover :deep(.book-progress-ring) {
-  opacity: 1;
-  visibility: visible;
+.home-book-cover-title {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    word-break: break-all;
+    line-height: 1.45;
+    opacity: 1;
+    transition: opacity 0.2s;
 }
 
-.empty-guide {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  padding: 28px;
-  border-radius: 24px;
+.home-book:hover .home-book-cover-title {
+    opacity: 0;
 }
 
-.empty-guide span {
-  color: #7d7162;
+.home-book:hover .book-progress-ring {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0s 0s;
 }
 
-.empty-guide h2 {
-  margin: 8px 0;
+.home-book-info {
+    padding: 10px 2px 0;
 }
 
-.empty-guide p {
-  margin: 0;
-  color: #7f7468;
+.home-book-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: 3px;
 }
 
-.cover-1 { background: linear-gradient(145deg, #2f5d50, #b58a53); }
-.cover-2 { background: linear-gradient(145deg, #36494f, #9f7254); }
-.cover-3 { background: linear-gradient(145deg, #6b4f3f, #d1a45d); }
-.cover-4 { background: linear-gradient(145deg, #344c3f, #75865c); }
-.cover-5 { background: linear-gradient(145deg, #4f4a5d, #c08b73); }
-.cover-6 { background: linear-gradient(145deg, #243833, #d1b36b); }
-
-@media (max-width: 920px) {
-  .reading-desk,
-  .stats-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .desk-focus {
-    align-self: stretch;
-  }
+.home-book-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
 }
 
-@media (max-width: 620px) {
-  .reading-desk {
-    padding: 24px;
-    border-radius: 20px;
-  }
+/* 引导区 */
+.home-guide {
+    background: var(--color-bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--color-border-light);
+    padding: 32px;
+    text-align: center;
+}
 
-  .desk-focus,
-  .today-panel,
-  .empty-guide {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.guide-text {
+    font-size: 15px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+}
 
-  .book-rail {
-    grid-auto-columns: 126px;
-  }
+.guide-btn {
+    display: inline-block;
+    background: var(--color-primary);
+    color: #FFFFFF;
+    padding: 8px 28px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+}
 
-  .book-cover {
-    width: 126px;
-    height: 176px;
-  }
+.guide-btn:hover {
+    background: var(--color-primary-dark);
+    color: #FFFFFF;
+}
+
+/* 响应式 */
+@media (max-width: 760px) {
+    .home-top {
+        flex-direction: column;
+    }
+    .today-card {
+        width: 100%;
+    }
 }
 </style>

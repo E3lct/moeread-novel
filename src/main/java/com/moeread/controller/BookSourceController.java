@@ -30,6 +30,12 @@ public class BookSourceController {
     }
 
     @LoginUser
+    @GetMapping("/subscriptions")
+    public Result<List<Map<String, String>>> subscriptions() {
+        return Result.ok(sourceService.listSubscriptions());
+    }
+
+    @LoginUser
     @GetMapping("/list")
     public Result<List<BookSourceDTO>> list() {
         return Result.ok(sourceService.listUserSources(RequestContext.getUserId()));
@@ -45,6 +51,12 @@ public class BookSourceController {
     @PostMapping("/batch")
     public Result<List<BookSourceDTO>> addBatch(@RequestBody List<BookSourceDTO> sources) {
         return Result.ok(sourceService.addSources(RequestContext.getUserId(), sources));
+    }
+
+    @LoginUser
+    @PostMapping("/subscribe")
+    public Result<List<BookSourceDTO>> subscribe(@RequestBody Map<String, String> body) {
+        return Result.ok(sourceService.subscribeSources(RequestContext.getUserId(), body.get("url")));
     }
 
     @LoginUser

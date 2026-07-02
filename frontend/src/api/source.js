@@ -4,6 +4,10 @@ export function getSourcePresets() {
   return request.get('/source/presets')
 }
 
+export function getSourceSubscriptions() {
+  return request.get('/source/subscriptions')
+}
+
 export function getSourceList() {
   return request.get('/source/list')
 }
@@ -18,6 +22,10 @@ export function addCustomSource(data) {
 
 export function addSourceBatch(data) {
   return request.post('/source/batch', data)
+}
+
+export function subscribeSource(url) {
+  return request.post('/source/subscribe', { url })
 }
 
 export function updateSourceEnabled(sourceId, enabled) {

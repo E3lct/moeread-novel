@@ -41,9 +41,22 @@
       <!-- 正文 -->
       <div class="reader-content-wrap" ref="contentWrap">
         <div class="reader-content">
-          <h2 class="reader-chapter-title">{{ currentChapter.title }}</h2>
-          <div class="reader-text">
-            <p v-for="(para, i) in paragraphs" :key="i">{{ para }}</p>
+          <div class="reader-state" v-if="loadingChapter">章节加载中...</div>
+          <div class="reader-state error" v-else-if="chapterError">
+            <div>{{ chapterError }}</div>
+            <button class="reader-nav-btn" @click="loadChapter(currentChapterIndex)">重试</button>
+          </div>
+          <div v-else-if="!chapters.length" class="reader-state error">这本书还没有可阅读章节，请重新导入或检查书源内容。</div>
+          <h2 v-else class="reader-chapter-title">{{ currentChapter.title || '未命名章节' }}</h2>
+          <div class="reader-text" v-if="!loadingChapter && !chapterError">
+            <p v-for="(para, i) in visibleParagraphs" :key="i">{{ para }}</p>
+            <button
+              v-if="paragraphs.length > paragraphLimit"
+              class="load-more"
+              @click="paragraphLimit += paragraphStep"
+            >
+              继续显示本章内容（{{ paragraphLimit }} / {{ paragraphs.length }}）
+            </button>
           </div>
 
           <!-- 翻页栏 -->
@@ -121,6 +134,11 @@ const currentChapter = ref({ title: '', content: '' })
 const tocCollapsed = ref(false)
 const settingsOpen = ref(false)
 const contentWrap = ref(null)
+const loadingChapter = ref(false)
+const chapterError = ref('')
+const paragraphLimit = ref(520)
+const paragraphStep = 520
+let loadSeq = 0
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -136,18 +154,31 @@ const paragraphs = computed(() => {
   return currentChapter.value.content.split('\n').filter(p => p.trim())
 })
 
+const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
+
 async function loadChapter(index) {
   if (index < 0 || index >= chapters.value.length) return
+  const seq = ++loadSeq
   currentChapterIndex.value = index
   const ch = chapters.value[index]
+  loadingChapter.value = true
+  chapterError.value = ''
+  paragraphLimit.value = paragraphStep
+  currentChapter.value = { ...ch, content: '' }
   try {
     const res = await getChapterContent(ch.id)
+    if (seq !== loadSeq) return
     currentChapter.value = res.data || ch
     await nextTick()
     if (contentWrap.value) contentWrap.value.scrollTop = 0
     saveCurrentProgress()
   } catch (e) {
     console.error('加载章节失败:', e)
+    if (seq === loadSeq) {
+      chapterError.value = e.message || '章节加载失败，请稍后重试'
+    }
+  } finally {
+    if (seq === loadSeq) loadingChapter.value = false
   }
 }
 
@@ -181,6 +212,7 @@ watch(lineHeight, (v) => readerStore.setLineHeight(v))
 watch(theme, (v) => readerStore.setTheme(v))
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   try {
     const [bookRes, chRes] = await Promise.all([
       getBookshelf(),
@@ -204,9 +236,8 @@ onMounted(async () => {
     if (chapters.value.length) await loadChapter(0)
   } catch (e) {
     console.error('加载阅读器失败:', e)
+    chapterError.value = e.message || '加载阅读器失败'
   }
-
-  window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
@@ -467,6 +498,37 @@ onUnmounted(() => {
     color: var(--color-text-tertiary);
     opacity: 0.5;
     margin-top: 16px;
+}
+
+.reader-state {
+    margin: 56px auto;
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    text-align: center;
+    color: var(--reader-text);
+    background: rgba(255, 255, 255, 0.48);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.reader-state.error {
+    color: #B45309;
+}
+
+.load-more {
+    display: block;
+    margin: 30px auto 8px;
+    padding: 10px 22px;
+    border: 1px solid rgba(217, 119, 6, 0.28);
+    border-radius: 999px;
+    background: rgba(255, 251, 235, 0.82);
+    color: #92400E;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.load-more:hover {
+    background: rgba(254, 243, 199, 0.95);
 }
 
 /* 设置浮窗按钮 */
