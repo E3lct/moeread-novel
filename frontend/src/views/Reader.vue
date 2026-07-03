@@ -338,13 +338,13 @@ async function initEpubReader() {
   epubError.value = ''
   epubLocationLabel.value = ''
   destroyEpubReader()
-  await nextTick()
-  await waitForStableFrame()
-  if (!epubViewer.value || seq !== epubInitSeq) return
-  epubViewer.value.innerHTML = ''
   try {
+    await nextTick()
+    await waitForStableFrame()
+    if (!epubViewer.value || seq !== epubInitSeq) return
+    epubViewer.value.innerHTML = ''
     epubBook = ePub(epubFileUrl.value)
-    await epubBook.ready
+    await withTimeout(epubBook.ready, 12000, 'EPUB 文件解析超时，请重新打开本书')
     if (seq !== epubInitSeq) return
     const metadata = epubBook.package?.metadata || {}
     epubMeta.value = {
@@ -361,39 +361,65 @@ async function initEpubReader() {
       const maxIndex = Math.max(chapters.value.length - 1, 0)
       currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
     }
-    const size = measureEpubViewer()
-    epubRendition = epubBook.renderTo(epubViewer.value, {
-      width: size.width,
-      height: size.height,
-      flow: pageMode.value === 'paged' ? 'paginated' : 'scrolled-doc',
-      spread: pageMode.value === 'paged' ? 'always' : 'none',
-      manager: 'default',
-      allowScriptedContent: false
-    })
-    bindEpubResize()
-    applyEpubTheme()
-    epubRendition.on('relocated', (location) => {
-      const current = location?.start?.displayed
-      epubLocationLabel.value = current ? `${current.page} / ${current.total}` : ''
-      epubSavedCfi = location?.start?.cfi || ''
-      if (epubSavedCfi) localStorage.setItem(epubProgressKey.value, epubSavedCfi)
-      updateEpubChapterIndex(location)
-      saveCurrentProgress()
-    })
+    createEpubRendition()
     const chapterTarget = chapters.value[currentChapterIndex.value]?.href
-    try {
-      await withTimeout(epubRendition.display(epubSavedCfi || chapterTarget), 16000, 'EPUB 加载超时，请切换滚动/翻页或重新打开本书')
-    } catch (displayError) {
-      if (!epubSavedCfi) throw displayError
-      epubSavedCfi = ''
-      localStorage.removeItem(epubProgressKey.value)
-      await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请切换滚动/翻页或重新打开本书')
-    }
+    await displayEpubInitialTarget(chapterTarget)
   } catch (e) {
     console.error('EPUB 加载失败:', e)
     epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
   } finally {
     if (seq === epubInitSeq) epubLoading.value = false
+  }
+}
+
+function createEpubRendition() {
+  if (!epubBook || !epubViewer.value) return
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  if (epubRendition) {
+    try { epubRendition.destroy() } catch (e) {}
+    epubRendition = null
+  }
+  epubViewer.value.innerHTML = ''
+  const size = measureEpubViewer()
+  epubRendition = epubBook.renderTo(epubViewer.value, {
+    width: size.width,
+    height: size.height,
+    flow: pageMode.value === 'paged' ? 'paginated' : 'scrolled-doc',
+    spread: pageMode.value === 'paged' ? 'always' : 'none',
+    manager: 'default',
+    allowScriptedContent: false
+  })
+  bindEpubResize()
+  applyEpubTheme()
+  epubRendition.on('relocated', (location) => {
+    const current = location?.start?.displayed
+    epubLocationLabel.value = current ? `${current.page} / ${current.total}` : ''
+    epubSavedCfi = location?.start?.cfi || ''
+    if (epubSavedCfi) localStorage.setItem(epubProgressKey.value, epubSavedCfi)
+    updateEpubChapterIndex(location)
+    saveCurrentProgress()
+  })
+}
+
+async function displayEpubInitialTarget(chapterTarget) {
+  const hasCfi = epubSavedCfi && /^epubcfi\(/i.test(epubSavedCfi)
+  if (!hasCfi) {
+    epubSavedCfi = ''
+    localStorage.removeItem(epubProgressKey.value)
+    await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请重新打开本书')
+    return
+  }
+  try {
+    await withTimeout(epubRendition.display(epubSavedCfi), 7000, 'EPUB 位置恢复超时')
+  } catch (displayError) {
+    console.warn('EPUB CFI 恢复失败，回退到章节:', displayError)
+    epubSavedCfi = ''
+    localStorage.removeItem(epubProgressKey.value)
+    createEpubRendition()
+    await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请重新打开本书')
   }
 }
 
@@ -446,10 +472,11 @@ function buildSpineChapters() {
 }
 
 function withTimeout(promise, ms, message) {
+  let timer = 0
   return Promise.race([
-    promise,
+    Promise.resolve(promise).finally(() => window.clearTimeout(timer)),
     new Promise((_, reject) => {
-      window.setTimeout(() => reject(new Error(message)), ms)
+      timer = window.setTimeout(() => reject(new Error(message)), ms)
     })
   ])
 }
