@@ -170,7 +170,10 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         Book book = createBook(userId, title, author, "epub");
         saveOriginalEpub(epubBytes, userId, book.getId());
         Map<String, String> assetMap = exportEpubAssets(entries, userId, book.getId());
-        String cover = findEpubCover(opfXml, manifest, assetMap);
+        String cover = saveEpubCover(entries, findEpubCoverPath(opfXml, manifest, spine, entries), userId, book.getId());
+        if (cover == null) cover = findEpubCover(opfXml, manifest, assetMap);
+        if (cover == null) cover = findCoverFromXhtml(spine, entries, assetMap);
+        if (cover == null) cover = findLikelyCover(assetMap);
         if (cover != null) book.setCoverImagePath(cover);
 
         List<Chapter> chapters = new ArrayList<>();
@@ -502,6 +505,90 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             if (properties.contains("cover-image") && assetMap.containsKey(item.path)) return assetMap.get(item.path);
         }
         return null;
+    }
+
+    private String findEpubCoverPath(String opfXml, Map<String, ManifestItem> manifest, List<ManifestItem> spine,
+                                     Map<String, byte[]> entries) {
+        Matcher meta = Pattern.compile("<\\s*meta\\b([^>]*)>", Pattern.CASE_INSENSITIVE).matcher(opfXml);
+        while (meta.find()) {
+            String attrs = meta.group(1);
+            if (!"cover".equalsIgnoreCase(xmlAttr(attrs, "name"))) continue;
+            ManifestItem item = manifest.get(xmlAttr(attrs, "content"));
+            if (item != null && entries.containsKey(item.path) && isEpubImage(item.path, item.mediaType)) return item.path;
+        }
+        for (ManifestItem item : manifest.values()) {
+            String properties = item.properties == null ? "" : item.properties;
+            if (properties.contains("cover-image") && entries.containsKey(item.path) && isEpubImage(item.path, item.mediaType)) {
+                return item.path;
+            }
+        }
+        for (ManifestItem item : spine) {
+            String lower = item.path == null ? "" : item.path.toLowerCase();
+            if (!lower.contains("cover") && !lower.contains("titlepage") && !lower.contains("front")) continue;
+            String xhtml = textEntry(entries, item.path);
+            if (xhtml == null) continue;
+            Document document = Jsoup.parse(xhtml);
+            Element image = document.selectFirst("img[src], image[xlink:href], image[href]");
+            if (image == null) continue;
+            String src = image.hasAttr("src") ? image.attr("src") : (image.hasAttr("xlink:href") ? image.attr("xlink:href") : image.attr("href"));
+            String imagePath = resolveEpubPath(parentDir(item.path), src);
+            if (entries.containsKey(imagePath) && isEpubImage(imagePath, null)) return imagePath;
+            imagePath = findEpubEntryBySuffix(entries, normalizeZipPath(src));
+            if (imagePath != null && isEpubImage(imagePath, null)) return imagePath;
+        }
+        String fallback = null;
+        for (String path : entries.keySet()) {
+            if (!isEpubImage(path, null)) continue;
+            String lower = path.toLowerCase();
+            if (lower.contains("cover") || lower.contains("front") || lower.contains("titlepage")) return path;
+            if (fallback == null && !lower.endsWith(".svg") && !lower.endsWith(".gif")) fallback = path;
+        }
+        return fallback;
+    }
+
+    private String saveEpubCover(Map<String, byte[]> entries, String path, Integer userId, Integer bookId) {
+        if (path == null || !entries.containsKey(path)) return null;
+        try {
+            Path root = Paths.get(uploadPath).toAbsolutePath().resolve("covers");
+            Files.createDirectories(root);
+            String ext = imageExtension(path, null);
+            String filename = userId + "_" + bookId + "_epub_cover" + ext;
+            Files.write(root.resolve(filename), entries.get(path), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return "/uploads/covers/" + filename;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private String findCoverFromXhtml(List<ManifestItem> spine, Map<String, byte[]> entries, Map<String, String> assetMap) {
+        for (ManifestItem item : spine) {
+            String lower = item.path == null ? "" : item.path.toLowerCase();
+            if (!lower.contains("cover") && !lower.contains("titlepage") && !lower.contains("front")) continue;
+            String xhtml = textEntry(entries, item.path);
+            if (xhtml == null) continue;
+            Document document = Jsoup.parse(xhtml);
+            Element image = document.selectFirst("img[src], image[xlink:href], image[href]");
+            if (image == null) continue;
+            String src = image.hasAttr("src") ? image.attr("src") : (image.hasAttr("xlink:href") ? image.attr("xlink:href") : image.attr("href"));
+            String imagePath = resolveEpubPath(parentDir(item.path), src);
+            String resolved = assetMap.get(imagePath);
+            if (resolved != null) return resolved;
+            imagePath = findEpubEntryBySuffix(entries, normalizeZipPath(src));
+            if (imagePath != null && assetMap.containsKey(imagePath)) return assetMap.get(imagePath);
+        }
+        return null;
+    }
+
+    private String findLikelyCover(Map<String, String> assetMap) {
+        String fallback = null;
+        for (Map.Entry<String, String> entry : assetMap.entrySet()) {
+            String lower = entry.getKey().toLowerCase();
+            if (lower.contains("cover") || lower.contains("front") || lower.contains("titlepage")) {
+                return entry.getValue();
+            }
+            if (fallback == null && !lower.endsWith(".svg") && !lower.endsWith(".gif")) fallback = entry.getValue();
+        }
+        return fallback;
     }
 
     private String sanitizeEpubChapter(String xhtml, String chapterPath, Map<String, String> assetMap,
