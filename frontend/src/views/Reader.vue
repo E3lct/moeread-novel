@@ -211,6 +211,8 @@ let epubBook = null
 let epubRendition = null
 let epubInitSeq = 0
 let savedChapterIndex = 0
+let epubSavedCfi = ''
+let resizeObserver = null
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -244,6 +246,7 @@ const pagedPages = computed(() => paginateBlocks(readingBlocks.value))
 const visiblePages = computed(() => [pagedPages.value[pageIndex.value], pagedPages.value[pageIndex.value + 1]])
 const canPrevPage = computed(() => pageIndex.value > 0 || currentChapterIndex.value > 0)
 const canNextPage = computed(() => pageIndex.value + 2 < pagedPages.value.length || currentChapterIndex.value < chapters.value.length - 1)
+const epubProgressKey = computed(() => `reader:epub:cfi:${bookId}`)
 
 async function loadChapter(index) {
   if (index < 0 || index >= chapters.value.length) return
@@ -286,6 +289,10 @@ function goToChapter(index) {
 }
 
 function destroyEpubReader() {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (epubRendition) {
     try { epubRendition.destroy() } catch (e) {}
     epubRendition = null
@@ -332,6 +339,7 @@ async function initEpubReader() {
   epubLocationLabel.value = ''
   destroyEpubReader()
   await nextTick()
+  await waitForStableFrame()
   if (!epubViewer.value || seq !== epubInitSeq) return
   epubViewer.value.innerHTML = ''
   try {
@@ -353,29 +361,64 @@ async function initEpubReader() {
       const maxIndex = Math.max(chapters.value.length - 1, 0)
       currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
     }
+    const size = measureEpubViewer()
     epubRendition = epubBook.renderTo(epubViewer.value, {
-      width: '100%',
-      height: '100%',
+      width: size.width,
+      height: size.height,
       flow: pageMode.value === 'paged' ? 'paginated' : 'scrolled-doc',
       spread: pageMode.value === 'paged' ? 'always' : 'none',
       manager: 'default',
       allowScriptedContent: false
     })
+    bindEpubResize()
     applyEpubTheme()
     epubRendition.on('relocated', (location) => {
       const current = location?.start?.displayed
       epubLocationLabel.value = current ? `${current.page} / ${current.total}` : ''
+      epubSavedCfi = location?.start?.cfi || ''
+      if (epubSavedCfi) localStorage.setItem(epubProgressKey.value, epubSavedCfi)
       updateEpubChapterIndex(location)
       saveCurrentProgress()
     })
-    const target = chapters.value[currentChapterIndex.value]?.href
-    await withTimeout(epubRendition.display(target), 16000, 'EPUB 加载超时，请切换滚动/翻页或重新打开本书')
+    const chapterTarget = chapters.value[currentChapterIndex.value]?.href
+    try {
+      await withTimeout(epubRendition.display(epubSavedCfi || chapterTarget), 16000, 'EPUB 加载超时，请切换滚动/翻页或重新打开本书')
+    } catch (displayError) {
+      if (!epubSavedCfi) throw displayError
+      epubSavedCfi = ''
+      localStorage.removeItem(epubProgressKey.value)
+      await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请切换滚动/翻页或重新打开本书')
+    }
   } catch (e) {
     console.error('EPUB 加载失败:', e)
     epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
   } finally {
     if (seq === epubInitSeq) epubLoading.value = false
   }
+}
+
+function waitForStableFrame() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  })
+}
+
+function measureEpubViewer() {
+  const rect = epubViewer.value?.getBoundingClientRect()
+  return {
+    width: Math.max(320, Math.floor(rect?.width || 0)),
+    height: Math.max(420, Math.floor(rect?.height || 0))
+  }
+}
+
+function bindEpubResize() {
+  if (!epubViewer.value || !window.ResizeObserver) return
+  resizeObserver = new ResizeObserver(() => {
+    if (!epubRendition) return
+    const size = measureEpubViewer()
+    epubRendition.resize(size.width, size.height)
+  })
+  resizeObserver.observe(epubViewer.value)
 }
 
 function flattenEpubToc(items, depth = 0) {
@@ -419,6 +462,8 @@ async function goToEpubChapter(index) {
   epubError.value = ''
   try {
     const target = chapters.value[index].href || epubBook?.spine?.spineItems?.[index]?.href
+    epubSavedCfi = ''
+    localStorage.removeItem(epubProgressKey.value)
     await withTimeout(epubRendition.display(target), 12000, '章节跳转超时，请重新打开本书')
     scrollTocToCurrent()
     saveCurrentProgress()
@@ -652,6 +697,7 @@ onMounted(async () => {
           currentChapterIndex.value = savedChapterIndex
         }
       } catch (e) {}
+      epubSavedCfi = localStorage.getItem(epubProgressKey.value) || ''
       if (pageMode.value === 'paged') tocCollapsed.value = true
       await nextTick()
       await initEpubReader()
@@ -1234,10 +1280,30 @@ onUnmounted(() => {
 .epub-viewer {
     position: absolute;
     inset: clamp(18px, 2.2vw, 34px) clamp(20px, 3vw, 48px);
+    overflow: hidden;
+    contain: strict;
+    min-width: 0;
 }
 
 .epub-frame.scroll-frame .epub-viewer {
     inset: 0 clamp(10px, 3vw, 54px);
+    overflow: auto;
+    contain: content;
+}
+
+.epub-viewer :deep(iframe) {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    border: 0 !important;
+    overflow: hidden !important;
+}
+
+.epub-frame.scroll-frame .epub-viewer :deep(iframe) {
+    height: auto !important;
+    min-height: 100% !important;
 }
 
 .epub-hit {
