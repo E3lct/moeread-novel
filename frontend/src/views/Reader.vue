@@ -213,6 +213,7 @@ let epubInitSeq = 0
 let savedChapterIndex = 0
 let epubSavedCfi = ''
 let resizeObserver = null
+const epubBufferCache = new Map()
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -343,8 +344,47 @@ async function initEpubReader() {
     await waitForStableFrame()
     if (!epubViewer.value || seq !== epubInitSeq) return
     epubViewer.value.innerHTML = ''
-    epubBook = ePub(epubFileUrl.value)
-    await withTimeout(epubBook.ready, 12000, 'EPUB 文件解析超时，请重新打开本书')
+    const epubSource = await loadEpubSource(epubFileUrl.value)
+    if (seq !== epubInitSeq) return
+    epubBook = ePub(epubSource)
+    createEpubRendition()
+    await displayEpubInitialTarget(undefined)
+    if (seq !== epubInitSeq) return
+    await hydrateEpubMetadataAndToc(seq)
+  } catch (e) {
+    console.error('EPUB 加载失败:', e)
+    epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
+  } finally {
+    if (seq === epubInitSeq) epubLoading.value = false
+  }
+}
+
+async function loadEpubSource(url) {
+  if (epubBufferCache.has(url)) {
+    return epubBufferCache.get(url).slice(0)
+  }
+  const cacheKey = new Request(url, { credentials: 'same-origin' })
+  let response = null
+  if ('caches' in window) {
+    const cache = await caches.open('moeread-epub-v1')
+    response = await cache.match(cacheKey)
+    if (!response) {
+      response = await fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
+      if (!response.ok) throw new Error('EPUB 文件读取失败')
+      cache.put(cacheKey, response.clone()).catch(() => {})
+    }
+  } else {
+    response = await fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
+  }
+  if (!response || !response.ok) throw new Error('EPUB 文件读取失败')
+  const buffer = await response.arrayBuffer()
+  epubBufferCache.set(url, buffer)
+  return buffer.slice(0)
+}
+
+async function hydrateEpubMetadataAndToc(seq) {
+  try {
+    await withTimeout(epubBook.ready, 12000, 'EPUB 文件解析超时')
     if (seq !== epubInitSeq) return
     const metadata = epubBook.package?.metadata || {}
     epubMeta.value = {
@@ -361,14 +401,8 @@ async function initEpubReader() {
       const maxIndex = Math.max(chapters.value.length - 1, 0)
       currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
     }
-    createEpubRendition()
-    const chapterTarget = chapters.value[currentChapterIndex.value]?.href
-    await displayEpubInitialTarget(chapterTarget)
   } catch (e) {
-    console.error('EPUB 加载失败:', e)
-    epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
-  } finally {
-    if (seq === epubInitSeq) epubLoading.value = false
+    console.warn('EPUB 元数据加载较慢，先保留正文阅读:', e)
   }
 }
 
