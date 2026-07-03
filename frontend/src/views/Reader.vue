@@ -409,18 +409,68 @@ async function displayEpubInitialTarget(chapterTarget) {
   if (!hasCfi) {
     epubSavedCfi = ''
     localStorage.removeItem(epubProgressKey.value)
-    await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请重新打开本书')
+    await displayWithFallback(chapterTarget)
     return
   }
   try {
-    await withTimeout(epubRendition.display(epubSavedCfi), 7000, 'EPUB 位置恢复超时')
+    await waitForEpubDisplay(epubSavedCfi, 7000, 'EPUB 位置恢复超时')
   } catch (displayError) {
     console.warn('EPUB CFI 恢复失败，回退到章节:', displayError)
     epubSavedCfi = ''
     localStorage.removeItem(epubProgressKey.value)
     createEpubRendition()
-    await withTimeout(epubRendition.display(chapterTarget), 12000, 'EPUB 加载超时，请重新打开本书')
+    await displayWithFallback(chapterTarget)
   }
+}
+
+async function displayWithFallback(target) {
+  try {
+    await waitForEpubDisplay(target, 10000, 'EPUB 目录位置加载超时')
+  } catch (targetError) {
+    console.warn('EPUB 指定位置加载失败，尝试打开首页:', targetError)
+    createEpubRendition()
+    await waitForEpubDisplay(undefined, 10000, 'EPUB 加载超时，请重新导入或检查文件')
+  }
+}
+
+function waitForEpubDisplay(target, ms, message) {
+  if (!epubRendition) return Promise.reject(new Error('EPUB 阅读器未初始化'))
+  let settled = false
+  let timer = 0
+  let offRendered = null
+  let offRelocated = null
+  const cleanup = () => {
+    window.clearTimeout(timer)
+    try {
+      if (offRendered) epubRendition.off('rendered', offRendered)
+      if (offRelocated) epubRendition.off('relocated', offRelocated)
+    } catch (e) {}
+  }
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    const fail = (error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error instanceof Error ? error : new Error(String(error || message)))
+    }
+    offRendered = done
+    offRelocated = done
+    epubRendition.on('rendered', offRendered)
+    epubRendition.on('relocated', offRelocated)
+    timer = window.setTimeout(() => fail(new Error(message)), ms)
+    try {
+      const displayPromise = target ? epubRendition.display(target) : epubRendition.display()
+      Promise.resolve(displayPromise).then(done).catch(fail)
+    } catch (error) {
+      fail(error)
+    }
+  })
 }
 
 function waitForStableFrame() {
@@ -491,7 +541,7 @@ async function goToEpubChapter(index) {
     const target = chapters.value[index].href || epubBook?.spine?.spineItems?.[index]?.href
     epubSavedCfi = ''
     localStorage.removeItem(epubProgressKey.value)
-    await withTimeout(epubRendition.display(target), 12000, '章节跳转超时，请重新打开本书')
+    await waitForEpubDisplay(target, 10000, '章节跳转超时，请重新打开本书')
     scrollTocToCurrent()
     saveCurrentProgress()
   } catch (e) {
