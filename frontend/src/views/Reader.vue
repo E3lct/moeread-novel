@@ -54,7 +54,7 @@
               <div ref="epubViewer" class="epub-viewer"></div>
               <button v-if="pageMode === 'paged'" class="epub-hit epub-hit-left" @click="prevPage" aria-label="上一页"></button>
               <button v-if="pageMode === 'paged'" class="epub-hit epub-hit-right" @click="nextPage" aria-label="下一页"></button>
-              <div v-if="epubLoading" class="epub-loading">EPUB 加载中...</div>
+              <div v-if="epubLoading && !epubHasVisibleFrame" class="epub-loading">EPUB 加载中...</div>
               <div v-if="epubError" class="epub-error">{{ epubError }}</div>
             </div>
             <div class="epub-reader-footer">
@@ -203,6 +203,7 @@ const loadingChapter = ref(false)
 const chapterError = ref('')
 const epubLoading = ref(false)
 const epubError = ref('')
+const epubHasVisibleFrame = ref(false)
 const epubMeta = ref({ title: '', creator: '' })
 const epubLocationLabel = ref('')
 const paragraphLimit = ref(520)
@@ -337,6 +338,7 @@ async function initEpubReader() {
   const seq = ++epubInitSeq
   epubLoading.value = true
   epubError.value = ''
+  epubHasVisibleFrame.value = false
   epubLocationLabel.value = ''
   destroyEpubReader()
   try {
@@ -387,7 +389,7 @@ async function hydrateEpubMetadataAndToc(seq) {
   }
 }
 
-function createEpubRendition() {
+function createEpubRendition(options = {}) {
   if (!epubBook || !epubViewer.value) return
   if (resizeObserver) {
     resizeObserver.disconnect()
@@ -398,12 +400,13 @@ function createEpubRendition() {
     epubRendition = null
   }
   epubViewer.value.innerHTML = ''
+  epubHasVisibleFrame.value = false
   const size = measureEpubViewer()
   epubRendition = epubBook.renderTo(epubViewer.value, {
     width: size.width,
     height: size.height,
     flow: pageMode.value === 'paged' ? 'paginated' : 'scrolled-doc',
-    spread: pageMode.value === 'paged' ? 'always' : 'none',
+    spread: pageMode.value === 'paged' ? (options.forceSingle ? 'none' : 'auto') : 'none',
     manager: 'default',
     allowScriptedContent: false
   })
@@ -451,7 +454,14 @@ async function displayWithFallback(target) {
   } catch (targetError) {
     console.warn('EPUB 指定位置加载失败，尝试打开首页:', targetError)
     createEpubRendition()
-    await waitForEpubDisplay(undefined, 10000, 'EPUB 加载超时，请重新导入或检查文件')
+    try {
+      await waitForEpubDisplay(undefined, 10000, 'EPUB 加载超时，请重新导入或检查文件')
+    } catch (homeError) {
+      if (pageMode.value !== 'paged') throw homeError
+      console.warn('EPUB 双页排版失败，降级为单页分页:', homeError)
+      createEpubRendition({ forceSingle: true })
+      await waitForEpubDisplay(target || undefined, 10000, 'EPUB 加载超时，请切换滚动模式或重新导入文件')
+    }
   }
 }
 
@@ -475,6 +485,7 @@ function waitForEpubDisplay(target, ms, message) {
     const done = () => {
       if (displaySeq !== epubDisplaySeq) return
       if (settled) return
+      epubHasVisibleFrame.value = true
       settled = true
       cleanup()
       resolve()
@@ -492,7 +503,8 @@ function waitForEpubDisplay(target, ms, message) {
     epubRendition.on('relocated', offRelocated)
     const probeFrame = () => {
       if (settled || displaySeq !== epubDisplaySeq) return
-      if (epubViewer.value?.querySelector('iframe')) {
+      if (epubViewer.value?.querySelector('iframe, .epub-container, [ref="epubjs-view"]')) {
+        epubHasVisibleFrame.value = true
         done()
         return
       }
