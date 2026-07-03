@@ -34,7 +34,8 @@ export async function fastEpubSource(url) {
     memoryCache.set(normalized, buffer)
     return buffer.slice(0)
   }
-  return loadEpubSource(normalized)
+  warmEpubCache(normalized)
+  return normalized
 }
 
 export async function warmEpubCache(bookOrUrl) {

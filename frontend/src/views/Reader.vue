@@ -218,9 +218,8 @@ let resizeObserver = null
 let epubUserNavSeq = 0
 let epubDisplaySeq = 0
 const EPUB_FILE_TIMEOUT = 6000
-const EPUB_READY_TIMEOUT = 5000
-const EPUB_DISPLAY_TIMEOUT = 1200
-const EPUB_CFI_TIMEOUT = 900
+const EPUB_DISPLAY_TIMEOUT = 1600
+const EPUB_CFI_TIMEOUT = 1000
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -353,13 +352,10 @@ async function initEpubReader() {
     const epubSource = await withTimeout(fastEpubSource(book.value), EPUB_FILE_TIMEOUT, 'EPUB 文件读取超时，请重新导入或检查文件')
     if (seq !== epubInitSeq) return
     epubBook = ePub(epubSource)
-    await withTimeout(epubBook.ready, EPUB_READY_TIMEOUT, 'EPUB 文件解析超时，请重新导入或检查文件')
-    if (seq !== epubInitSeq) return
-    await hydrateEpubMetadataAndToc(seq)
-    if (seq !== epubInitSeq) return
     createEpubRendition()
-    await displayEpubInitialTarget(getInitialEpubTarget())
+    await displayEpubInitialTarget()
     if (seq !== epubInitSeq) return
+    hydrateEpubMetadataAndToc(seq)
     scrollTocToCurrent()
   } catch (e) {
     console.error('EPUB 加载失败:', e)
@@ -371,6 +367,7 @@ async function initEpubReader() {
 
 async function hydrateEpubMetadataAndToc(seq) {
   try {
+    await withTimeout(epubBook.ready, 8000, 'EPUB 元数据解析超时')
     if (seq !== epubInitSeq) return
     const metadata = epubBook.package?.metadata || {}
     epubMeta.value = {
@@ -410,7 +407,7 @@ function createEpubRendition() {
     width: size.width,
     height: size.height,
     flow: pageMode.value === 'paged' ? 'paginated' : 'scrolled-doc',
-    spread: 'none',
+    spread: pageMode.value === 'paged' ? 'always' : 'none',
     manager: 'default',
     allowScriptedContent: false
   })
@@ -427,12 +424,12 @@ function createEpubRendition() {
   })
 }
 
-async function displayEpubInitialTarget(chapterTarget) {
+async function displayEpubInitialTarget() {
   const hasCfi = epubSavedCfi && /^epubcfi\(/i.test(epubSavedCfi)
   if (!hasCfi) {
     epubSavedCfi = ''
     localStorage.removeItem(epubProgressKey.value)
-    await displayWithFallback(chapterTarget)
+    await displayWithFallback(undefined)
     return
   }
   try {
@@ -442,7 +439,7 @@ async function displayEpubInitialTarget(chapterTarget) {
     epubSavedCfi = ''
     localStorage.removeItem(epubProgressKey.value)
     createEpubRendition()
-    await displayWithFallback(chapterTarget)
+    await displayWithFallback(undefined)
   }
 }
 
@@ -461,9 +458,7 @@ async function displayWithFallback(target) {
     try {
       await waitForEpubDisplay(undefined, EPUB_DISPLAY_TIMEOUT, 'EPUB 加载超时，请重新导入或检查文件')
     } catch (homeError) {
-      if (pageMode.value !== 'paged') throw homeError
-      console.warn('EPUB 分页排版失败，改用滚动渲染:', homeError)
-      pageMode.value = 'scroll'
+      throw homeError
     }
   }
 }
