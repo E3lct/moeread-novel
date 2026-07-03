@@ -1,4 +1,4 @@
-const EPUB_CACHE_NAME = 'moeread-epub-v1'
+const EPUB_CACHE_NAME = 'moeread-epub-v2'
 const memoryCache = new Map()
 const warming = new Set()
 
@@ -9,7 +9,7 @@ export function epubUrl(bookOrUrl) {
 }
 
 export function epubReaderUrl(bookOrUrl) {
-  const raw = typeof bookOrUrl === 'string' ? bookOrUrl : (bookOrUrl?.epubOpfUrl || bookOrUrl?.epubUrl)
+  const raw = typeof bookOrUrl === 'string' ? bookOrUrl : bookOrUrl?.epubUrl
   if (!raw) return ''
   return raw.startsWith('http') ? raw : '/api' + raw
 }
@@ -25,9 +25,8 @@ export async function loadEpubSource(url) {
 }
 
 export async function fastEpubSource(url) {
-  const normalized = epubReaderUrl(url)
+  const normalized = epubUrl(url)
   if (!normalized) throw new Error('EPUB 地址为空')
-  if (/\.opf($|[?#])/i.test(normalized)) return normalized
   if (memoryCache.has(normalized)) return memoryCache.get(normalized).slice(0)
   const cached = await cachedResponse(normalized)
   if (cached) {
@@ -35,8 +34,7 @@ export async function fastEpubSource(url) {
     memoryCache.set(normalized, buffer)
     return buffer.slice(0)
   }
-  warmEpubCache(normalized)
-  return normalized
+  return loadEpubSource(normalized)
 }
 
 export async function warmEpubCache(bookOrUrl) {

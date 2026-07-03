@@ -237,7 +237,7 @@ const paragraphs = computed(() => {
 })
 
 const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
-const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!(book.value?.epubOpfUrl || book.value?.epubUrl))
+const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!book.value?.epubUrl)
 const epubFileUrl = computed(() => {
   return epubReaderUrl(book.value)
 })
@@ -335,7 +335,6 @@ function applyEpubTheme() {
 async function initEpubReader() {
   if (!isEpubBook.value || !epubViewer.value || !epubFileUrl.value) return
   const seq = ++epubInitSeq
-  const navSeqAtStart = epubUserNavSeq
   epubLoading.value = true
   epubError.value = ''
   epubLocationLabel.value = ''
@@ -345,13 +344,17 @@ async function initEpubReader() {
     await waitForStableFrame()
     if (!epubViewer.value || seq !== epubInitSeq) return
     epubViewer.value.innerHTML = ''
-    const epubSource = await fastEpubSource(epubFileUrl.value)
+    const epubSource = await withTimeout(fastEpubSource(book.value), 15000, 'EPUB 文件读取超时，请重新导入或检查文件')
     if (seq !== epubInitSeq) return
     epubBook = ePub(epubSource)
-    createEpubRendition()
-    await displayEpubInitialTarget(undefined)
+    await withTimeout(epubBook.ready, 15000, 'EPUB 文件解析超时，请重新导入或检查文件')
     if (seq !== epubInitSeq) return
-    await hydrateEpubMetadataAndToc(seq, navSeqAtStart)
+    await hydrateEpubMetadataAndToc(seq)
+    if (seq !== epubInitSeq) return
+    createEpubRendition()
+    await displayEpubInitialTarget(getInitialEpubTarget())
+    if (seq !== epubInitSeq) return
+    scrollTocToCurrent()
   } catch (e) {
     console.error('EPUB 加载失败:', e)
     epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
@@ -360,9 +363,8 @@ async function initEpubReader() {
   }
 }
 
-async function hydrateEpubMetadataAndToc(seq, navSeqAtStart) {
+async function hydrateEpubMetadataAndToc(seq) {
   try {
-    await withTimeout(epubBook.ready, 12000, 'EPUB 文件解析超时')
     if (seq !== epubInitSeq) return
     const metadata = epubBook.package?.metadata || {}
     epubMeta.value = {
@@ -377,12 +379,11 @@ async function hydrateEpubMetadataAndToc(seq, navSeqAtStart) {
     }
     if (chapters.value.length) {
       const maxIndex = Math.max(chapters.value.length - 1, 0)
-      if (epubUserNavSeq === navSeqAtStart) {
-        currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
-      }
+      currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
     }
   } catch (e) {
-    console.warn('EPUB 元数据加载较慢，先保留正文阅读:', e)
+    console.warn('EPUB 元数据读取失败，使用 spine 目录:', e)
+    chapters.value = buildSpineChapters()
   }
 }
 
@@ -438,6 +439,12 @@ async function displayEpubInitialTarget(chapterTarget) {
   }
 }
 
+function getInitialEpubTarget() {
+  if (!chapters.value.length) return undefined
+  const index = Math.min(Math.max(savedChapterIndex, 0), chapters.value.length - 1)
+  return chapters.value[index]?.href || epubBook?.spine?.spineItems?.[index]?.href
+}
+
 async function displayWithFallback(target) {
   try {
     await waitForEpubDisplay(target, 10000, 'EPUB 目录位置加载超时')
@@ -453,10 +460,12 @@ function waitForEpubDisplay(target, ms, message) {
   const displaySeq = ++epubDisplaySeq
   let settled = false
   let timer = 0
+  let frameTimer = 0
   let offRendered = null
   let offRelocated = null
   const cleanup = () => {
     window.clearTimeout(timer)
+    window.clearTimeout(frameTimer)
     try {
       if (offRendered) epubRendition.off('rendered', offRendered)
       if (offRelocated) epubRendition.off('relocated', offRelocated)
@@ -481,6 +490,15 @@ function waitForEpubDisplay(target, ms, message) {
     offRelocated = done
     epubRendition.on('rendered', offRendered)
     epubRendition.on('relocated', offRelocated)
+    const probeFrame = () => {
+      if (settled || displaySeq !== epubDisplaySeq) return
+      if (epubViewer.value?.querySelector('iframe')) {
+        done()
+        return
+      }
+      frameTimer = window.setTimeout(probeFrame, 120)
+    }
+    frameTimer = window.setTimeout(probeFrame, 180)
     timer = window.setTimeout(() => fail(new Error(message)), ms)
     try {
       const displayPromise = target ? epubRendition.display(target) : epubRendition.display()
