@@ -13,6 +13,14 @@
 
       <div class="reader-topbar-title">{{ book.title }} - {{ currentChapter.title }}</div>
 
+      <button
+        class="reader-mode-btn"
+        :class="{ active: pageMode === 'paged' }"
+        @click="pageMode = pageMode === 'paged' ? 'scroll' : 'paged'"
+      >
+        {{ pageMode === 'paged' ? '翻页' : '滚动' }}
+      </button>
+
       <router-link :to="`/muck/${bookId}`" class="reader-stealth-btn">
         摸鱼模式
       </router-link>
@@ -39,7 +47,7 @@
       </div>
 
       <!-- 正文 -->
-      <div class="reader-content-wrap" ref="contentWrap">
+      <div class="reader-content-wrap" :class="{ 'paged-mode': pageMode === 'paged' }" ref="contentWrap">
         <div class="reader-content">
           <div class="reader-state" v-if="loadingChapter">章节加载中...</div>
           <div class="reader-state error" v-else-if="chapterError">
@@ -48,7 +56,35 @@
           </div>
           <div v-else-if="!chapters.length" class="reader-state error">这本书还没有可阅读章节，请重新导入或检查书源内容。</div>
           <h2 v-else class="reader-chapter-title">{{ currentChapter.title || '未命名章节' }}</h2>
-          <div class="reader-text" v-if="!loadingChapter && !chapterError">
+          <div
+            v-if="!loadingChapter && !chapterError && pageMode === 'paged'"
+            class="ebook-stage"
+            :class="pageTurnClass"
+          >
+            <button class="page-hit page-hit-left" :disabled="!canPrevPage" @click="prevPage" aria-label="上一页"></button>
+            <div class="ebook-spread">
+              <article
+                v-for="(page, side) in visiblePages"
+                :key="`${currentChapterIndex}-${pageIndex}-${side}`"
+                class="ebook-page"
+                :class="{ empty: !page }"
+              >
+                <div class="ebook-page-head" v-if="page">
+                  <span>{{ currentChapter.title || '章节' }}</span>
+                  <span>{{ pageIndex + side + 1 }} / {{ pagedPages.length || 1 }}</span>
+                </div>
+                <div class="ebook-page-body" v-if="page">
+                  <template v-for="(block, i) in page.blocks" :key="i">
+                    <p v-if="block.type === 'text'">{{ block.text }}</p>
+                    <div v-else class="ebook-html-block" v-html="block.html"></div>
+                  </template>
+                </div>
+              </article>
+            </div>
+            <button class="page-hit page-hit-right" :disabled="!canNextPage" @click="nextPage" aria-label="下一页"></button>
+          </div>
+
+          <div class="reader-text" v-else-if="!loadingChapter && !chapterError && !isHtmlChapter">
             <p v-for="(para, i) in visibleParagraphs" :key="i">{{ para }}</p>
             <button
               v-if="paragraphs.length > paragraphLimit"
@@ -58,6 +94,7 @@
               继续显示本章内容（{{ paragraphLimit }} / {{ paragraphs.length }}）
             </button>
           </div>
+          <div class="reader-text reader-html" v-else-if="!loadingChapter && !chapterError" v-html="currentChapter.content"></div>
 
           <!-- 翻页栏 -->
           <div class="reader-nav">
@@ -73,7 +110,7 @@
               @click="goToChapter(currentChapterIndex + 1)"
             >下一章</button>
           </div>
-          <div class="reader-shortcut-hint">键盘左右键翻页</div>
+          <div class="reader-shortcut-hint">{{ pageMode === 'paged' ? '左右键翻页，点页面边缘也可以翻页' : '键盘左右键切换章节' }}</div>
         </div>
       </div>
     </div>
@@ -85,6 +122,13 @@
 
     <!-- 设置面板 -->
     <div class="reader-settings-panel" :class="{ open: settingsOpen }">
+      <div class="settings-group">
+        <div class="settings-label">版式</div>
+        <div class="layout-segment">
+          <button :class="{ active: pageMode === 'scroll' }" @click="pageMode = 'scroll'">滚动</button>
+          <button :class="{ active: pageMode === 'paged' }" @click="pageMode = 'paged'">翻页</button>
+        </div>
+      </div>
       <div class="settings-group">
         <div class="settings-label">字号</div>
         <div class="settings-controls">
@@ -144,6 +188,11 @@ let loadSeq = 0
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
 const theme = ref(readerStore.theme || 'default')
+const savedPageMode = localStorage.getItem('readerPageMode')
+const pageMode = ref(savedPageMode === 'spread' ? 'paged' : (savedPageMode || 'scroll'))
+const pageIndex = ref(0)
+const pageTurnClass = ref('')
+let pageTurnTimer = 0
 
 const readerStyle = computed(() => ({
   '--reader-font-size': fontSize.value + 'px',
@@ -156,6 +205,12 @@ const paragraphs = computed(() => {
 })
 
 const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
+const isHtmlChapter = computed(() => /<\s*(p|div|section|article|img|h[1-6]|br)\b/i.test(currentChapter.value.content || ''))
+const readingBlocks = computed(() => buildReadingBlocks(currentChapter.value.content || '', isHtmlChapter.value))
+const pagedPages = computed(() => paginateBlocks(readingBlocks.value))
+const visiblePages = computed(() => [pagedPages.value[pageIndex.value], pagedPages.value[pageIndex.value + 1]])
+const canPrevPage = computed(() => pageIndex.value > 0 || currentChapterIndex.value > 0)
+const canNextPage = computed(() => pageIndex.value + 2 < pagedPages.value.length || currentChapterIndex.value < chapters.value.length - 1)
 
 async function loadChapter(index) {
   if (index < 0 || index >= chapters.value.length) return
@@ -171,8 +226,12 @@ async function loadChapter(index) {
     const res = await getChapterContent(ch.id)
     if (seq !== loadSeq) return
     currentChapter.value = res.data || ch
+    pageIndex.value = 0
     await nextTick()
-    if (contentWrap.value) contentWrap.value.scrollTop = 0
+    if (contentWrap.value) {
+      contentWrap.value.scrollTop = 0
+      contentWrap.value.scrollLeft = 0
+    }
     scrollTocToCurrent()
     saveCurrentProgress()
   } catch (e) {
@@ -187,6 +246,97 @@ async function loadChapter(index) {
 
 function goToChapter(index) {
   loadChapter(index)
+}
+
+function triggerPageTurn(direction) {
+  window.clearTimeout(pageTurnTimer)
+  pageTurnClass.value = direction === 'next' ? 'turn-next' : 'turn-prev'
+  pageTurnTimer = window.setTimeout(() => {
+    pageTurnClass.value = ''
+  }, 420)
+}
+
+async function nextPage() {
+  if (pageMode.value !== 'paged') {
+    if (currentChapterIndex.value < chapters.value.length - 1) goToChapter(currentChapterIndex.value + 1)
+    return
+  }
+  if (pageIndex.value + 2 < pagedPages.value.length) {
+    triggerPageTurn('next')
+    pageIndex.value += 2
+    saveCurrentProgress()
+    return
+  }
+  if (currentChapterIndex.value < chapters.value.length - 1) {
+    triggerPageTurn('next')
+    await loadChapter(currentChapterIndex.value + 1)
+  }
+}
+
+async function prevPage() {
+  if (pageMode.value !== 'paged') {
+    if (currentChapterIndex.value > 0) goToChapter(currentChapterIndex.value - 1)
+    return
+  }
+  if (pageIndex.value > 0) {
+    triggerPageTurn('prev')
+    pageIndex.value = Math.max(0, pageIndex.value - 2)
+    saveCurrentProgress()
+    return
+  }
+  if (currentChapterIndex.value > 0) {
+    triggerPageTurn('prev')
+    await loadChapter(currentChapterIndex.value - 1)
+    await nextTick()
+    pageIndex.value = Math.max(0, Math.floor((pagedPages.value.length - 1) / 2) * 2)
+  }
+}
+
+function buildReadingBlocks(content, htmlMode) {
+  if (!content) return []
+  if (!htmlMode) {
+    return content.split('\n')
+      .map(text => text.trim())
+      .filter(Boolean)
+      .map(text => ({ type: 'text', text, weight: text.length }))
+  }
+  const doc = new DOMParser().parseFromString(`<main>${content}</main>`, 'text/html')
+  const nodes = Array.from(doc.body.firstElementChild?.children || [])
+  return nodes.map(node => {
+    const tag = node.tagName?.toLowerCase()
+    const html = node.outerHTML
+    const text = node.textContent?.trim() || ''
+    const hasImage = tag === 'img' || node.querySelector?.('img')
+    return {
+      type: 'html',
+      html,
+      weight: hasImage ? 1200 : Math.max(text.length, 80)
+    }
+  }).filter(block => block.html)
+}
+
+function paginateBlocks(blocks) {
+  const pages = []
+  const limit = pageMode.value === 'paged' ? 1050 : 1600
+  let current = []
+  let size = 0
+  for (const block of blocks) {
+    const blockSize = block.weight || 120
+    if (current.length && size + blockSize > limit) {
+      pages.push({ blocks: current })
+      current = []
+      size = 0
+    }
+    current.push(block)
+    size += blockSize
+    if (blockSize >= limit * 0.9) {
+      pages.push({ blocks: current })
+      current = []
+      size = 0
+    }
+  }
+  if (current.length) pages.push({ blocks: current })
+  return pages.length ? pages : [{ blocks: [] }]
 }
 
 async function scrollTocToCurrent() {
@@ -210,17 +360,47 @@ async function saveCurrentProgress() {
 
 function handleKeydown(e) {
   if (e.key === 'ArrowLeft') {
-    if (currentChapterIndex.value > 0) goToChapter(currentChapterIndex.value - 1)
+    if (pageMode.value === 'paged') {
+      e.preventDefault()
+      prevPage()
+    } else if (currentChapterIndex.value > 0) {
+      goToChapter(currentChapterIndex.value - 1)
+    }
   } else if (e.key === 'ArrowRight') {
-    if (currentChapterIndex.value < chapters.value.length - 1) goToChapter(currentChapterIndex.value + 1)
+    if (pageMode.value === 'paged') {
+      e.preventDefault()
+      nextPage()
+    } else if (currentChapterIndex.value < chapters.value.length - 1) {
+      goToChapter(currentChapterIndex.value + 1)
+    }
   } else if (e.key === 'Escape') {
     settingsOpen.value = false
+  } else if (e.key === 'PageUp' && pageMode.value === 'paged') {
+    e.preventDefault()
+    prevPage()
+  } else if (e.key === 'PageDown' && pageMode.value === 'paged') {
+    e.preventDefault()
+    nextPage()
   }
 }
 
 watch(fontSize, (v) => readerStore.setFontSize(v))
 watch(lineHeight, (v) => readerStore.setLineHeight(v))
 watch(theme, (v) => readerStore.setTheme(v))
+watch(pageMode, async (v) => {
+  localStorage.setItem('readerPageMode', v)
+  await nextTick()
+  if (contentWrap.value) {
+    contentWrap.value.scrollTop = 0
+    contentWrap.value.scrollLeft = 0
+  }
+  pageIndex.value = 0
+})
+watch(pagedPages, () => {
+  if (pageIndex.value >= pagedPages.value.length) {
+    pageIndex.value = Math.max(0, Math.floor((pagedPages.value.length - 1) / 2) * 2)
+  }
+})
 watch(currentChapterIndex, () => scrollTocToCurrent())
 watch(tocCollapsed, (collapsed) => {
   if (!collapsed) scrollTocToCurrent()
@@ -257,6 +437,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.clearTimeout(pageTurnTimer)
   saveCurrentProgress()
 })
 </script>
@@ -672,5 +853,256 @@ onUnmounted(() => {
     color: #fff;
     border-color: var(--color-primary);
     box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);
+}
+
+.reader-mode-btn {
+    border: 1px solid rgba(217, 119, 6, 0.24);
+    border-radius: 999px;
+    padding: 5px 12px;
+    background: rgba(255, 251, 235, 0.62);
+    color: var(--color-primary-darker);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.reader-mode-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.reader-html :deep(p),
+.reader-html :deep(div) {
+    margin: 0 0 1.3em;
+    word-break: break-word;
+}
+
+.reader-html :deep(h1),
+.reader-html :deep(h2),
+.reader-html :deep(h3) {
+    margin: 1.4em 0 0.8em;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.reader-html :deep(img),
+.reader-html :deep(.reader-illustration) {
+    display: block;
+    max-width: min(100%, 720px);
+    max-height: 82vh;
+    width: auto;
+    height: auto;
+    margin: 1.8em auto;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.reader-content-wrap.paged-mode {
+    overflow: hidden;
+}
+
+.reader-content-wrap.paged-mode .reader-content {
+    max-width: none;
+    min-height: calc(100vh - 52px);
+    padding: 26px clamp(24px, 4vw, 56px) 34px;
+}
+
+.reader-content-wrap.paged-mode .reader-chapter-title {
+    margin-bottom: 18px;
+}
+
+.ebook-stage {
+    position: relative;
+    max-width: 1180px;
+    margin: 0 auto;
+    perspective: 1800px;
+}
+
+.ebook-spread {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: min(72vh, 760px);
+    background: linear-gradient(90deg, rgba(72, 55, 35, 0.08), transparent 2.6%, transparent 97.4%, rgba(72, 55, 35, 0.08));
+    border-radius: 10px;
+    box-shadow: 0 22px 58px rgba(53, 43, 31, 0.18);
+    transform-style: preserve-3d;
+}
+
+.ebook-spread::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 28px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(0,0,0,0.12), rgba(255,255,255,0.28), rgba(0,0,0,0.10));
+    opacity: 0.42;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.ebook-page {
+    position: relative;
+    min-height: min(72vh, 760px);
+    padding: 28px 34px 34px;
+    overflow: hidden;
+    background:
+        linear-gradient(90deg, rgba(0,0,0,0.035), transparent 8%),
+        var(--reader-bg);
+    border: 1px solid rgba(72, 55, 35, 0.08);
+}
+
+.ebook-page:first-child {
+    border-radius: 10px 0 0 10px;
+    transform-origin: right center;
+}
+
+.ebook-page:last-child {
+    border-radius: 0 10px 10px 0;
+    transform-origin: left center;
+    background:
+        linear-gradient(270deg, rgba(0,0,0,0.035), transparent 8%),
+        var(--reader-bg);
+}
+
+.ebook-page.empty {
+    opacity: 0.58;
+}
+
+.ebook-page-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+    font-size: 11px;
+    color: var(--reader-text);
+    opacity: 0.46;
+    white-space: nowrap;
+}
+
+.ebook-page-body {
+    height: calc(min(72vh, 760px) - 92px);
+    overflow: hidden;
+    font-size: var(--reader-font-size);
+    line-height: var(--reader-line-height);
+}
+
+.ebook-page-body p,
+.ebook-html-block :deep(p),
+.ebook-html-block :deep(div) {
+    margin: 0 0 1.1em;
+    text-indent: 2em;
+    word-break: break-word;
+}
+
+.ebook-html-block :deep(h1),
+.ebook-html-block :deep(h2),
+.ebook-html-block :deep(h3) {
+    margin: 0.8em 0 0.8em;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.ebook-html-block :deep(img) {
+    display: block;
+    max-width: 100%;
+    max-height: calc(min(72vh, 760px) - 130px);
+    width: auto;
+    height: auto;
+    margin: 1em auto;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.ebook-stage.turn-next .ebook-page:last-child {
+    animation: pageTurnNext 0.42s cubic-bezier(.2,.72,.25,1);
+}
+
+.ebook-stage.turn-prev .ebook-page:first-child {
+    animation: pageTurnPrev 0.42s cubic-bezier(.2,.72,.25,1);
+}
+
+.page-hit {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 18%;
+    z-index: 5;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.page-hit:disabled {
+    cursor: default;
+}
+
+.page-hit-left { left: 0; }
+.page-hit-right { right: 0; }
+
+@keyframes pageTurnNext {
+    0% { transform: rotateY(0deg); filter: brightness(1); }
+    48% { transform: rotateY(-18deg); filter: brightness(0.96); }
+    100% { transform: rotateY(0deg); filter: brightness(1); }
+}
+
+@keyframes pageTurnPrev {
+    0% { transform: rotateY(0deg); filter: brightness(1); }
+    48% { transform: rotateY(18deg); filter: brightness(0.96); }
+    100% { transform: rotateY(0deg); filter: brightness(1); }
+}
+
+.layout-segment {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: #f3eadc;
+}
+
+.layout-segment button {
+    border: 0;
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+
+.layout-segment button.active {
+    background: #fff;
+    color: var(--color-primary-darker);
+    font-weight: 700;
+}
+
+@media (max-width: 900px) {
+    .reader-content-wrap.paged-mode {
+        overflow-y: auto;
+    }
+    .reader-content-wrap.paged-mode .reader-content {
+        width: auto;
+        padding: 34px 22px 92px;
+    }
+    .ebook-spread {
+        grid-template-columns: 1fr;
+        min-height: 70vh;
+    }
+    .ebook-spread::before,
+    .ebook-page:nth-child(2) {
+        display: none;
+    }
+    .ebook-page:first-child {
+        border-radius: 10px;
+    }
+    .ebook-page-body {
+        height: auto;
+        min-height: 56vh;
+        max-height: none;
+        overflow: visible;
+    }
 }
 </style>

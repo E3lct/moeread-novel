@@ -55,6 +55,14 @@ public class BookController {
         return Result.ok(bookService.importZip(userId, file));
     }
 
+    /** 导入 EPUB */
+    @LoginUser
+    @PostMapping("/import/epub")
+    public Result<Book> importEpub(@RequestParam("file") MultipartFile file) {
+        Integer userId = RequestContext.getUserId();
+        return Result.ok(bookService.importEpub(userId, file));
+    }
+
     /** 编辑书籍 */
     @LoginUser
     @PutMapping("/{bookId}")

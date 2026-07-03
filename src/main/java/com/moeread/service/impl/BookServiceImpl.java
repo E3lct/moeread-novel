@@ -6,6 +6,10 @@ import com.moeread.dto.BookVO;
 import com.moeread.entity.*;
 import com.moeread.mapper.*;
 import com.moeread.service.BookService;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.parser.Parser;
 import org.mozilla.universalchardet.UniversalDetector;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -124,6 +129,57 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             throw new RuntimeException("读取ZIP失败: " + e.getMessage());
         }
         return imported;
+    }
+
+    @Override
+    @Transactional
+    public Book importEpub(Integer userId, MultipartFile file) {
+        Map<String, byte[]> entries = readEpubEntries(file);
+        String containerXml = textEntry(entries, "META-INF/container.xml");
+        if (containerXml == null || containerXml.isBlank()) {
+            throw new RuntimeException("EPUB 缺少 META-INF/container.xml");
+        }
+        Document container = Jsoup.parse(containerXml, "", Parser.xmlParser());
+        Element rootfile = container.selectFirst("rootfile[full-path]");
+        if (rootfile == null) throw new RuntimeException("EPUB 未找到 OPF 包描述文件");
+
+        String opfPath = normalizeZipPath(rootfile.attr("full-path"));
+        String opfXml = textEntry(entries, opfPath);
+        if (opfXml == null || opfXml.isBlank()) throw new RuntimeException("EPUB OPF 文件为空");
+
+        String opfDir = parentDir(opfPath);
+        String title = firstTagText(opfXml, "dc:title", "title");
+        if (title == null || title.isBlank()) title = file.getOriginalFilename();
+        if (title != null && title.toLowerCase().endsWith(".epub")) title = title.substring(0, title.length() - 5);
+        String author = firstTagText(opfXml, "dc:creator", "creator");
+
+        Map<String, ManifestItem> manifest = parseManifest(opfXml, opfDir);
+        List<ManifestItem> spine = parseSpine(opfXml, manifest, entries);
+        if (spine.isEmpty()) throw new RuntimeException("EPUB 未找到可阅读章节");
+
+        Book book = createBook(userId, title, author, "epub");
+        Map<String, String> assetMap = exportEpubAssets(entries, userId, book.getId());
+        String cover = findEpubCover(opfXml, manifest, assetMap);
+        if (cover != null) book.setCoverImagePath(cover);
+
+        List<Chapter> chapters = new ArrayList<>();
+        for (ManifestItem item : spine) {
+            String xhtml = textEntry(entries, item.path);
+            String html = sanitizeEpubChapter(xhtml, item.path, assetMap, entries, userId, book.getId());
+            if (html == null || html.isBlank()) continue;
+            String chapterTitle = chapterTitleFromHtml(xhtml);
+            if (chapterTitle == null || chapterTitle.isBlank()) chapterTitle = "第" + (chapters.size() + 1) + "章";
+            chapters.add(buildChapter(book.getId(), chapters.size(), cleanField(chapterTitle, 120, "章节"), html));
+        }
+        if (chapters.isEmpty()) throw new RuntimeException("EPUB 未解析到有效章节");
+        if ((book.getCoverImagePath() == null || book.getCoverImagePath().isBlank()) && !assetMap.isEmpty()) {
+            book.setCoverImagePath(assetMap.values().iterator().next());
+        }
+        for (Chapter chapter : chapters) chapterMapper.insert(chapter);
+        book.setChapterCount(chapters.size());
+        book.setTotalWords(chapters.stream().mapToInt(ch -> ch.getWordCount() == null ? 0 : ch.getWordCount()).sum());
+        updateById(book);
+        return book;
     }
 
     @Override
@@ -250,6 +306,266 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength);
     }
 
+    private Map<String, byte[]> readEpubEntries(MultipartFile file) {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        long total = 0;
+        try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (entry.isDirectory()) continue;
+                String name = normalizeZipPath(entry.getName());
+                if (name.isBlank() || name.contains("..")) continue;
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = zis.read(buffer)) != -1) {
+                    bos.write(buffer, 0, len);
+                    total += len;
+                    if (total > 120L * 1024 * 1024) {
+                        throw new RuntimeException("EPUB 文件过大，请拆分后导入");
+                    }
+                }
+                entries.put(name, bos.toByteArray());
+                zis.closeEntry();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("读取 EPUB 失败: " + e.getMessage());
+        }
+        return entries;
+    }
+
+    private String textEntry(Map<String, byte[]> entries, String path) {
+        byte[] bytes = entries.get(normalizeZipPath(path));
+        return bytes == null ? null : decodeText(bytes);
+    }
+
+    private String normalizeZipPath(String path) {
+        if (path == null) return "";
+        return path.replace('\\', '/').replaceAll("^/+", "").trim();
+    }
+
+    private String parentDir(String path) {
+        String normalized = normalizeZipPath(path);
+        int index = normalized.lastIndexOf('/');
+        return index >= 0 ? normalized.substring(0, index + 1) : "";
+    }
+
+    private String resolveEpubPath(String baseDir, String href) {
+        String raw = normalizeZipPath(href == null ? "" : href.split("#", 2)[0]);
+        String combined = normalizeZipPath(baseDir) + "/" + raw;
+        Deque<String> parts = new ArrayDeque<>();
+        for (String part : combined.split("/+")) {
+            if (part.isBlank() || ".".equals(part)) continue;
+            if ("..".equals(part)) {
+                if (!parts.isEmpty()) parts.removeLast();
+            } else {
+                parts.addLast(part);
+            }
+        }
+        return String.join("/", parts);
+    }
+
+    private Map<String, ManifestItem> parseManifest(String opfXml, String opfDir) {
+        Map<String, ManifestItem> manifest = new LinkedHashMap<>();
+        Matcher matcher = Pattern.compile("<\\s*item\\b([^>]*)>", Pattern.CASE_INSENSITIVE).matcher(opfXml);
+        while (matcher.find()) {
+            String attrs = matcher.group(1);
+            String id = xmlAttr(attrs, "id");
+            String href = xmlAttr(attrs, "href");
+            if (id == null || href == null) continue;
+            ManifestItem mi = new ManifestItem();
+            mi.id = id;
+            mi.href = href;
+            mi.mediaType = xmlAttr(attrs, "media-type");
+            mi.properties = xmlAttr(attrs, "properties");
+            mi.path = resolveEpubPath(opfDir, href);
+            manifest.put(id, mi);
+        }
+        return manifest;
+    }
+
+    private List<ManifestItem> parseSpine(String opfXml, Map<String, ManifestItem> manifest, Map<String, byte[]> entries) {
+        List<ManifestItem> spine = new ArrayList<>();
+        Matcher matcher = Pattern.compile("<\\s*itemref\\b([^>]*)>", Pattern.CASE_INSENSITIVE).matcher(opfXml);
+        while (matcher.find()) {
+            String idref = xmlAttr(matcher.group(1), "idref");
+            ManifestItem mi = idref == null ? null : manifest.get(idref);
+            if (mi != null && entries.containsKey(mi.path)) spine.add(mi);
+        }
+        return spine;
+    }
+
+    private String xmlAttr(String attrs, String name) {
+        if (attrs == null) return null;
+        Matcher matcher = Pattern.compile("\\b" + Pattern.quote(name) + "\\s*=\\s*(['\"])(.*?)\\1", Pattern.CASE_INSENSITIVE | Pattern.DOTALL)
+                .matcher(attrs);
+        return matcher.find() ? Jsoup.parse(matcher.group(2)).text().trim() : null;
+    }
+
+    private String firstTagText(String xml, String... tagNames) {
+        if (xml == null) return null;
+        for (String tag : tagNames) {
+            Matcher matcher = Pattern.compile("<\\s*" + Pattern.quote(tag) + "\\b[^>]*>(.*?)</\\s*" + Pattern.quote(tag) + "\\s*>",
+                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(xml);
+            if (matcher.find()) return Jsoup.parse(matcher.group(1)).text().trim();
+        }
+        return null;
+    }
+
+    private Map<String, String> exportEpubAssets(Map<String, byte[]> entries, Integer userId, Integer bookId) {
+        Map<String, String> assetMap = new HashMap<>();
+        Path root = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+        try {
+            Files.createDirectories(root);
+            for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+                if (!isEpubImage(entry.getKey(), null) || assetMap.containsKey(entry.getKey())) continue;
+                saveEpubAsset(assetMap, root, userId, bookId, entry.getKey(), null, entry.getValue());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("保存 EPUB 插图失败: " + e.getMessage());
+        }
+        return assetMap;
+    }
+
+    private void saveEpubAsset(Map<String, String> assetMap, Path root, Integer userId, Integer bookId,
+                               String path, String mediaType, byte[] bytes) throws IOException {
+        String ext = imageExtension(path, mediaType);
+        String filename = safeAssetName(path, ext);
+        Path target = root.resolve(filename).normalize();
+        if (!target.startsWith(root)) return;
+        Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        assetMap.put(path, "/uploads/epub/" + userId + "_" + bookId + "/" + filename);
+    }
+
+    private boolean isEpubImage(String path, String mediaType) {
+        String type = mediaType == null ? "" : mediaType.toLowerCase();
+        String lower = path == null ? "" : path.toLowerCase();
+        return type.startsWith("image/")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".png")
+                || lower.endsWith(".webp")
+                || lower.endsWith(".gif")
+                || lower.endsWith(".svg");
+    }
+
+    private String imageExtension(String path, String mediaType) {
+        String lower = path == null ? "" : path.toLowerCase();
+        int dot = lower.lastIndexOf('.');
+        if (dot >= 0 && dot > lower.lastIndexOf('/')) return lower.substring(dot);
+        if (mediaType != null && mediaType.contains("png")) return ".png";
+        if (mediaType != null && mediaType.contains("webp")) return ".webp";
+        if (mediaType != null && mediaType.contains("gif")) return ".gif";
+        if (mediaType != null && mediaType.contains("svg")) return ".svg";
+        return ".jpg";
+    }
+
+    private String safeAssetName(String path, String ext) {
+        String normalized = normalizeZipPath(path).replace('/', '_').replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (!normalized.toLowerCase().endsWith(ext)) normalized += ext;
+        return normalized.length() <= 160 ? normalized : Math.abs(path.hashCode()) + ext;
+    }
+
+    private String findEpubCover(String opfXml, Map<String, ManifestItem> manifest, Map<String, String> assetMap) {
+        Matcher meta = Pattern.compile("<\\s*meta\\b([^>]*)>", Pattern.CASE_INSENSITIVE).matcher(opfXml);
+        while (meta.find()) {
+            String attrs = meta.group(1);
+            if (!"cover".equalsIgnoreCase(xmlAttr(attrs, "name"))) continue;
+            ManifestItem item = manifest.get(xmlAttr(attrs, "content"));
+            if (item != null && assetMap.containsKey(item.path)) return assetMap.get(item.path);
+        }
+        for (ManifestItem item : manifest.values()) {
+            String properties = item.properties == null ? "" : item.properties;
+            if (properties.contains("cover-image") && assetMap.containsKey(item.path)) return assetMap.get(item.path);
+        }
+        return null;
+    }
+
+    private String sanitizeEpubChapter(String xhtml, String chapterPath, Map<String, String> assetMap,
+                                       Map<String, byte[]> entries, Integer userId, Integer bookId) {
+        if (xhtml == null || xhtml.isBlank()) return null;
+        Document document = Jsoup.parse(xhtml);
+        document.select("script, style, iframe, object, embed, form, input, button, textarea, select, link, meta").remove();
+        Element body = document.body();
+        if (body == null) return null;
+        String baseDir = parentDir(chapterPath);
+        Path assetRoot = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+        for (Element element : body.select("*")) {
+            List<String> removeAttrs = new ArrayList<>();
+            element.attributes().forEach(attr -> {
+                String key = attr.getKey().toLowerCase();
+                if (key.startsWith("on") || key.equals("style") || key.equals("srcset")) removeAttrs.add(attr.getKey());
+            });
+            for (String attr : removeAttrs) element.removeAttr(attr);
+        }
+        for (Element image : body.select("img, image")) {
+            String src = image.hasAttr("src") ? image.attr("src") : image.attr("xlink:href");
+            String imagePath = resolveEpubPath(baseDir, src);
+            String resolved = assetMap.get(imagePath);
+            if (resolved == null && (!entries.containsKey(imagePath) || !isEpubImage(imagePath, null))) {
+                imagePath = findEpubEntryBySuffix(entries, normalizeZipPath(src));
+            }
+            if (resolved == null && imagePath != null && entries.containsKey(imagePath) && isEpubImage(imagePath, null)) {
+                try {
+                    Files.createDirectories(assetRoot);
+                    saveEpubAsset(assetMap, assetRoot, userId, bookId, imagePath, null, entries.get(imagePath));
+                    resolved = assetMap.get(imagePath);
+                } catch (IOException ignored) {
+                    resolved = null;
+                }
+            }
+            if (resolved == null && imagePath != null && entries.containsKey(imagePath) && isEpubImage(imagePath, null)) {
+                resolved = imageDataUri(imagePath, entries.get(imagePath));
+            }
+            if (resolved == null) {
+                image.remove();
+                continue;
+            }
+            if (!"img".equals(image.tagName())) image.tagName("img");
+            image.attr("src", resolved);
+            image.removeAttr("xlink:href");
+            image.attr("loading", "lazy");
+        }
+        for (Element link : body.select("a[href]")) {
+            link.removeAttr("href");
+        }
+        body.select("img").addClass("reader-illustration");
+        String html = body.html().trim();
+        return html.isBlank() ? null : html;
+    }
+
+    private String imageDataUri(String path, byte[] bytes) {
+        if (bytes == null || bytes.length == 0 || bytes.length > 2 * 1024 * 1024) return null;
+        String lower = path == null ? "" : path.toLowerCase();
+        String mime = "image/jpeg";
+        if (lower.endsWith(".png")) mime = "image/png";
+        else if (lower.endsWith(".webp")) mime = "image/webp";
+        else if (lower.endsWith(".gif")) mime = "image/gif";
+        else if (lower.endsWith(".svg")) mime = "image/svg+xml";
+        return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private String findEpubEntryBySuffix(Map<String, byte[]> entries, String suffix) {
+        if (suffix == null || suffix.isBlank()) return null;
+        String normalized = normalizeZipPath(suffix);
+        for (String key : entries.keySet()) {
+            if (key.equals(normalized) || key.endsWith("/" + normalized)) return key;
+        }
+        String name = normalized.substring(normalized.lastIndexOf('/') + 1);
+        if (name.isBlank()) return null;
+        for (String key : entries.keySet()) {
+            if (key.endsWith("/" + name) || key.equals(name)) return key;
+        }
+        return null;
+    }
+
+    private String chapterTitleFromHtml(String xhtml) {
+        if (xhtml == null) return null;
+        Document document = Jsoup.parse(xhtml);
+        Element title = document.selectFirst("h1, h2, h3, title");
+        return title == null ? null : title.text().trim();
+    }
+
     /** 解析章节 */
     private List<Chapter> parseChapters(Integer bookId, String content) {
         String normalized = content
@@ -369,8 +685,16 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         ch.setChapterIndex(index);
         ch.setTitle(title.trim());
         ch.setContent(content);
-        ch.setWordCount(content.length());
+        ch.setWordCount(Jsoup.parse(content).text().length());
         return ch;
+    }
+
+    private static class ManifestItem {
+        String id;
+        String href;
+        String path;
+        String mediaType;
+        String properties;
     }
 
     /** 丰富书籍信息：进度 + 标签 */

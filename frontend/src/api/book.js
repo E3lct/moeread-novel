@@ -27,6 +27,14 @@ export function importZip(file) {
   })
 }
 
+export function importEpub(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/book/import/epub', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export function updateBook(bookId, data) {
   return request.put(`/book/${bookId}`, data)
 }

@@ -70,6 +70,7 @@
         <div class="format-pill">
           <button :class="{ active: format === 'txt' }" @click="format = 'txt'">TXT</button>
           <button :class="{ active: format === 'zip' }" @click="format = 'zip'">ZIP</button>
+          <button :class="{ active: format === 'epub' }" @click="format = 'epub'">EPUB</button>
         </div>
       </div>
 
@@ -83,7 +84,7 @@
       >
         <div class="drop-title">{{ selectedFile ? selectedFile.name : '点击或拖入文件' }}</div>
         <div class="drop-meta">{{ selectedFile ? formatFileSize(selectedFile.size) : `${format.toUpperCase()} 文件` }}</div>
-        <input ref="fileInput" type="file" :accept="format === 'txt' ? '.txt' : '.zip'" @change="handleFileSelect" hidden />
+        <input ref="fileInput" type="file" :accept="fileAccept" @change="handleFileSelect" hidden />
       </div>
 
       <div class="panel-actions">
@@ -170,7 +171,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { importTxt, importZip } from '../api/book'
+import { importEpub, importTxt, importZip } from '../api/book'
 import {
   addCustomSource,
   addSourceBatch,
@@ -208,6 +209,11 @@ const customSource = reactive({
 
 const enabledSources = computed(() => sources.value.filter(s => Number(s.enabled) === 1))
 const searchableSources = computed(() => enabledSources.value.filter(s => s.searchUrl))
+const fileAccept = computed(() => {
+  if (format.value === 'txt') return '.txt,text/plain'
+  if (format.value === 'epub') return '.epub,application/epub+zip'
+  return '.zip,application/zip'
+})
 
 function triggerFileInput() {
   fileInput.value?.click()
@@ -246,7 +252,9 @@ async function doImport() {
   if (!selectedFile.value) return
   importing.value = true
   try {
-    const res = format.value === 'txt' ? await importTxt(selectedFile.value) : await importZip(selectedFile.value)
+    const res = format.value === 'txt'
+      ? await importTxt(selectedFile.value)
+      : (format.value === 'epub' ? await importEpub(selectedFile.value) : await importZip(selectedFile.value))
     const count = Array.isArray(res.data) ? res.data.length : 1
     showResult(`导入成功，新增 ${count} 本书`)
     selectedFile.value = null

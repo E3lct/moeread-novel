@@ -21,6 +21,9 @@ public interface BookService extends IService<Book> {
     /** 导入 ZIP 批量 */
     List<Book> importZip(Integer userId, MultipartFile file);
 
+    /** 导入 EPUB 轻小说/电子书 */
+    Book importEpub(Integer userId, MultipartFile file);
+
     /** 从纯文本内容导入 */
     Book importTextContent(Integer userId, String title, String author, String content, String sourceType);
 
