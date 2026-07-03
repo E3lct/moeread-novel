@@ -8,6 +8,12 @@ export function epubUrl(bookOrUrl) {
   return raw.startsWith('http') ? raw : '/api' + raw
 }
 
+export function epubReaderUrl(bookOrUrl) {
+  const raw = typeof bookOrUrl === 'string' ? bookOrUrl : (bookOrUrl?.epubOpfUrl || bookOrUrl?.epubUrl)
+  if (!raw) return ''
+  return raw.startsWith('http') ? raw : '/api' + raw
+}
+
 export async function loadEpubSource(url) {
   const normalized = epubUrl(url)
   if (!normalized) throw new Error('EPUB 地址为空')
@@ -19,8 +25,9 @@ export async function loadEpubSource(url) {
 }
 
 export async function fastEpubSource(url) {
-  const normalized = epubUrl(url)
+  const normalized = epubReaderUrl(url)
   if (!normalized) throw new Error('EPUB 地址为空')
+  if (/\.opf($|[?#])/i.test(normalized)) return normalized
   if (memoryCache.has(normalized)) return memoryCache.get(normalized).slice(0)
   const cached = await cachedResponse(normalized)
   if (cached) {

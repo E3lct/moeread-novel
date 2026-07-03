@@ -15,6 +15,7 @@ public class BookVO {
     private String coverColor;
     private String coverImagePath;
     private String epubUrl;
+    private String epubOpfUrl;
     private String sourceType;
     private String status;
     private Integer isFavorite;

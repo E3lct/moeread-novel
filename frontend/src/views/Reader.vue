@@ -183,7 +183,7 @@ import { getBookshelf } from '../api/book'
 import { getChapterList, getChapterContent } from '../api/chapter'
 import { getProgress, saveProgress } from '../api/progress'
 import { useReaderStore } from '../stores/reader'
-import { epubUrl, fastEpubSource } from '../utils/epubCache'
+import { epubReaderUrl, fastEpubSource } from '../utils/epubCache'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,9 +237,9 @@ const paragraphs = computed(() => {
 })
 
 const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
-const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!book.value?.epubUrl)
+const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!(book.value?.epubOpfUrl || book.value?.epubUrl))
 const epubFileUrl = computed(() => {
-  return epubUrl(book.value)
+  return epubReaderUrl(book.value)
 })
 const isHtmlChapter = computed(() => /<\s*(p|div|section|article|img|h[1-6]|br)\b/i.test(currentChapter.value.content || ''))
 const readingBlocks = computed(() => buildReadingBlocks(currentChapter.value.content || '', isHtmlChapter.value))

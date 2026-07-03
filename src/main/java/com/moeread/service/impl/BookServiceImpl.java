@@ -149,12 +149,13 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         Map<String, ManifestItem> manifest = new LinkedHashMap<>();
         List<ManifestItem> spine = new ArrayList<>();
         String opfXml = "";
+        String opfPath = "";
 
         if (containerXml != null && !containerXml.isBlank()) {
             Document container = Jsoup.parse(containerXml, "", Parser.xmlParser());
             Element rootfile = container.selectFirst("rootfile[full-path]");
             if (rootfile != null) {
-                String opfPath = normalizeZipPath(rootfile.attr("full-path"));
+                opfPath = normalizeZipPath(rootfile.attr("full-path"));
                 opfXml = textEntry(entries, opfPath);
                 if (opfXml != null && !opfXml.isBlank()) {
                     String opfDir = parentDir(opfPath);
@@ -169,6 +170,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
         Book book = createBook(userId, title, author, "epub");
         saveOriginalEpub(epubBytes, userId, book.getId());
+        exportEpubPackage(epubBytes, userId, book.getId());
         Map<String, String> assetMap = exportEpubAssets(entries, userId, book.getId());
         String cover = saveEpubCover(entries, findEpubCoverPath(opfXml, manifest, spine, entries), userId, book.getId());
         if (cover == null) cover = findEpubCover(opfXml, manifest, assetMap);
@@ -277,7 +279,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     @Override
     public String uploadCover(Integer userId, MultipartFile file) {
         try {
-            Path dir = Paths.get(uploadPath).toAbsolutePath().resolve("covers");
+            Path dir = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("covers");
             Files.createDirectories(dir);
             String ext = ".jpg";
             String original = file.getOriginalFilename();
@@ -324,11 +326,60 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
     private void saveOriginalEpub(byte[] bytes, Integer userId, Integer bookId) {
         try {
-            Path root = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+            Path root = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId);
             Files.createDirectories(root);
             Files.write(root.resolve("book.epub"), bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             throw new RuntimeException("保存 EPUB 原文件失败: " + e.getMessage());
+        }
+    }
+
+    private void exportEpubPackage(Map<String, byte[]> entries, Integer userId, Integer bookId) {
+        Path root = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId).resolve("extracted");
+        try {
+            Files.createDirectories(root);
+            int written = 0;
+            for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+                String path = normalizeZipPath(entry.getKey());
+                if (path.isBlank() || hasUnsafePathSegment(path)) continue;
+                Path target = root.resolve(path).normalize();
+                if (!target.startsWith(root)) continue;
+                Files.createDirectories(target.getParent());
+                Files.write(target, entry.getValue(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                written++;
+            }
+            if (written == 0) throw new IOException("未写出任何 EPUB 条目");
+        } catch (IOException e) {
+            throw new RuntimeException("保存 EPUB 解包文件失败: " + e.getMessage());
+        }
+    }
+
+    private void exportEpubPackage(byte[] epubBytes, Integer userId, Integer bookId) {
+        Path root = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId).resolve("extracted");
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(epubBytes))) {
+            Files.createDirectories(root);
+            ZipEntry entry;
+            byte[] buffer = new byte[8192];
+            int written = 0;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (entry.isDirectory()) continue;
+                String path = normalizeZipPath(entry.getName());
+                if (path.isBlank() || hasUnsafePathSegment(path)) continue;
+                Path target = root.resolve(path).normalize();
+                if (!target.startsWith(root)) continue;
+                Files.createDirectories(target.getParent());
+                try (OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    int len;
+                    while ((len = zis.read(buffer)) != -1) {
+                        out.write(buffer, 0, len);
+                    }
+                }
+                written++;
+                zis.closeEntry();
+            }
+            if (written == 0) throw new IOException("未写出任何 EPUB 条目");
+        } catch (IOException e) {
+            throw new RuntimeException("保存 EPUB 解包文件失败: " + e.getMessage());
         }
     }
 
@@ -340,7 +391,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) continue;
                 String name = normalizeZipPath(entry.getName());
-                if (name.isBlank() || name.contains("..")) continue;
+                if (name.isBlank() || hasUnsafePathSegment(name)) continue;
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 byte[] buffer = new byte[8192];
                 int len;
@@ -368,6 +419,13 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     private String normalizeZipPath(String path) {
         if (path == null) return "";
         return path.replace('\\', '/').replaceAll("^/+", "").trim();
+    }
+
+    private boolean hasUnsafePathSegment(String path) {
+        for (String part : normalizeZipPath(path).split("/+")) {
+            if ("..".equals(part)) return true;
+        }
+        return false;
     }
 
     private String parentDir(String path) {
@@ -440,7 +498,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
 
     private Map<String, String> exportEpubAssets(Map<String, byte[]> entries, Integer userId, Integer bookId) {
         Map<String, String> assetMap = new HashMap<>();
-        Path root = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+        Path root = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId);
         try {
             Files.createDirectories(root);
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
@@ -549,7 +607,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     private String saveEpubCover(Map<String, byte[]> entries, String path, Integer userId, Integer bookId) {
         if (path == null || !entries.containsKey(path)) return null;
         try {
-            Path root = Paths.get(uploadPath).toAbsolutePath().resolve("covers");
+            Path root = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("covers");
             Files.createDirectories(root);
             String ext = imageExtension(path, null);
             String filename = userId + "_" + bookId + "_epub_cover" + ext;
@@ -599,7 +657,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         Element body = document.body();
         if (body == null) return null;
         String baseDir = parentDir(chapterPath);
-        Path assetRoot = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+        Path assetRoot = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId);
         for (Element element : body.select("*")) {
             List<String> removeAttrs = new ArrayList<>();
             element.attributes().forEach(attr -> {
@@ -828,6 +886,7 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             }
             if ("epub".equalsIgnoreCase(book.getSourceType())) {
                 vo.setEpubUrl("/uploads/epub/" + userId + "_" + book.getId() + "/book.epub");
+                vo.setEpubOpfUrl(findExtractedOpfUrl(userId, book.getId()));
             }
 
             // 标签
@@ -842,5 +901,35 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             vos.add(vo);
         }
         return vos;
+    }
+
+    private String findExtractedOpfUrl(Integer userId, Integer bookId) {
+        Path bookRoot = Paths.get(uploadPath).toAbsolutePath().normalize().resolve("epub").resolve(userId + "_" + bookId);
+        Path extracted = bookRoot.resolve("extracted");
+        String url = findOpfUrlInExtracted(userId, bookId, extracted);
+        if (url != null) return url;
+        Path epubFile = bookRoot.resolve("book.epub");
+        if (!Files.isRegularFile(epubFile)) return null;
+        try {
+            exportEpubPackage(Files.readAllBytes(epubFile), userId, bookId);
+            return findOpfUrlInExtracted(userId, bookId, extracted);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private String findOpfUrlInExtracted(Integer userId, Integer bookId, Path root) {
+        if (!Files.isDirectory(root)) return null;
+        try (java.util.stream.Stream<Path> stream = Files.walk(root, 5)) {
+            Optional<Path> opf = stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".opf"))
+                    .findFirst();
+            if (opf.isEmpty()) return null;
+            String relative = root.relativize(opf.get()).toString().replace('\\', '/');
+            return "/uploads/epub/" + userId + "_" + bookId + "/extracted/" + relative;
+        } catch (IOException e) {
+            return null;
+        }
     }
 }
