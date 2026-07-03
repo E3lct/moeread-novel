@@ -242,6 +242,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getBookshelf, updateBook, deleteBook as apiDeleteBook, uploadCover } from '../api/book'
 import BookCard from '../components/BookCard.vue'
 import CropModal from '../components/CropModal.vue'
+import { warmEpubBooks } from '../utils/epubCache'
 
 const books = ref([])
 const searchQuery = ref('')
@@ -452,6 +453,7 @@ onMounted(async () => {
   try {
     const res = await getBookshelf()
     books.value = res.data || []
+    warmEpubBooks(books.value, 6)
   } catch (e) {
     console.error('加载书架失败:', e)
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="book-card" :class="{ selectable, selected }" @click="handleCardClick">
+  <div class="book-card" :class="{ selectable, selected }" @click="handleCardClick" @pointerenter="warmBook">
     <div class="book-cover" :class="coverClass" :style="coverStyle">
       <button
         v-if="selectable"
@@ -49,6 +49,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import ProgressRing from './ProgressRing.vue'
+import { warmEpubCache } from '../utils/epubCache'
 
 const props = defineProps({
   book: { type: Object, required: true },
@@ -89,6 +90,10 @@ function handleCardClick() {
     return
   }
   goReader()
+}
+
+function warmBook() {
+  if (!props.selectable) warmEpubCache(props.book)
 }
 </script>
 

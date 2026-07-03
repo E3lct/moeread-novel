@@ -118,6 +118,7 @@ import { useRouter } from 'vue-router'
 import { getBookshelf } from '../api/book'
 import { getStatsOverview } from '../api/stats'
 import ProgressRing from '../components/ProgressRing.vue'
+import { warmEpubBooks } from '../utils/epubCache'
 
 const router = useRouter()
 
@@ -173,6 +174,7 @@ onMounted(async () => {
       getStatsOverview()
     ])
     books.value = bookRes.data || []
+    warmEpubBooks(books.value, 4)
     if (statsRes.data) {
       todayMinutes.value = statsRes.data.todayMinutes || 0
       streak.value = statsRes.data.streakDays || 0

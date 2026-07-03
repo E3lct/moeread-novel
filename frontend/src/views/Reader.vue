@@ -183,6 +183,7 @@ import { getBookshelf } from '../api/book'
 import { getChapterList, getChapterContent } from '../api/chapter'
 import { getProgress, saveProgress } from '../api/progress'
 import { useReaderStore } from '../stores/reader'
+import { epubUrl, fastEpubSource } from '../utils/epubCache'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,7 +216,6 @@ let epubSavedCfi = ''
 let resizeObserver = null
 let epubUserNavSeq = 0
 let epubDisplaySeq = 0
-const epubBufferCache = new Map()
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -239,9 +239,7 @@ const paragraphs = computed(() => {
 const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
 const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!book.value?.epubUrl)
 const epubFileUrl = computed(() => {
-  const url = book.value?.epubUrl || ''
-  if (!url) return ''
-  return url.startsWith('http') ? url : '/api' + url
+  return epubUrl(book.value)
 })
 const isHtmlChapter = computed(() => /<\s*(p|div|section|article|img|h[1-6]|br)\b/i.test(currentChapter.value.content || ''))
 const readingBlocks = computed(() => buildReadingBlocks(currentChapter.value.content || '', isHtmlChapter.value))
@@ -347,7 +345,7 @@ async function initEpubReader() {
     await waitForStableFrame()
     if (!epubViewer.value || seq !== epubInitSeq) return
     epubViewer.value.innerHTML = ''
-    const epubSource = await loadEpubSource(epubFileUrl.value)
+    const epubSource = await fastEpubSource(epubFileUrl.value)
     if (seq !== epubInitSeq) return
     epubBook = ePub(epubSource)
     createEpubRendition()
@@ -360,29 +358,6 @@ async function initEpubReader() {
   } finally {
     if (seq === epubInitSeq) epubLoading.value = false
   }
-}
-
-async function loadEpubSource(url) {
-  if (epubBufferCache.has(url)) {
-    return epubBufferCache.get(url).slice(0)
-  }
-  const cacheKey = new Request(url, { credentials: 'same-origin' })
-  let response = null
-  if ('caches' in window) {
-    const cache = await caches.open('moeread-epub-v1')
-    response = await cache.match(cacheKey)
-    if (!response) {
-      response = await fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
-      if (!response.ok) throw new Error('EPUB 文件读取失败')
-      cache.put(cacheKey, response.clone()).catch(() => {})
-    }
-  } else {
-    response = await fetch(url, { credentials: 'same-origin', cache: 'force-cache' })
-  }
-  if (!response || !response.ok) throw new Error('EPUB 文件读取失败')
-  const buffer = await response.arrayBuffer()
-  epubBufferCache.set(url, buffer)
-  return buffer.slice(0)
 }
 
 async function hydrateEpubMetadataAndToc(seq, navSeqAtStart) {
