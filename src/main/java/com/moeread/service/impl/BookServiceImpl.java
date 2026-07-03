@@ -134,30 +134,41 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
     @Override
     @Transactional
     public Book importEpub(Integer userId, MultipartFile file) {
-        Map<String, byte[]> entries = readEpubEntries(file);
-        String containerXml = textEntry(entries, "META-INF/container.xml");
-        if (containerXml == null || containerXml.isBlank()) {
-            throw new RuntimeException("EPUB 缺少 META-INF/container.xml");
+        byte[] epubBytes;
+        try {
+            epubBytes = file.getBytes();
+        } catch (IOException e) {
+            throw new RuntimeException("读取 EPUB 失败: " + e.getMessage());
         }
-        Document container = Jsoup.parse(containerXml, "", Parser.xmlParser());
-        Element rootfile = container.selectFirst("rootfile[full-path]");
-        if (rootfile == null) throw new RuntimeException("EPUB 未找到 OPF 包描述文件");
+        String fallbackTitle = cleanField(file.getOriginalFilename(), 200, "未命名书籍");
+        if (fallbackTitle.toLowerCase().endsWith(".epub")) fallbackTitle = fallbackTitle.substring(0, fallbackTitle.length() - 5);
+        Map<String, byte[]> entries = readEpubEntries(epubBytes);
+        String containerXml = textEntry(entries, "META-INF/container.xml");
+        String title = fallbackTitle;
+        String author = null;
+        Map<String, ManifestItem> manifest = new LinkedHashMap<>();
+        List<ManifestItem> spine = new ArrayList<>();
+        String opfXml = "";
 
-        String opfPath = normalizeZipPath(rootfile.attr("full-path"));
-        String opfXml = textEntry(entries, opfPath);
-        if (opfXml == null || opfXml.isBlank()) throw new RuntimeException("EPUB OPF 文件为空");
-
-        String opfDir = parentDir(opfPath);
-        String title = firstTagText(opfXml, "dc:title", "title");
-        if (title == null || title.isBlank()) title = file.getOriginalFilename();
-        if (title != null && title.toLowerCase().endsWith(".epub")) title = title.substring(0, title.length() - 5);
-        String author = firstTagText(opfXml, "dc:creator", "creator");
-
-        Map<String, ManifestItem> manifest = parseManifest(opfXml, opfDir);
-        List<ManifestItem> spine = parseSpine(opfXml, manifest, entries);
-        if (spine.isEmpty()) throw new RuntimeException("EPUB 未找到可阅读章节");
+        if (containerXml != null && !containerXml.isBlank()) {
+            Document container = Jsoup.parse(containerXml, "", Parser.xmlParser());
+            Element rootfile = container.selectFirst("rootfile[full-path]");
+            if (rootfile != null) {
+                String opfPath = normalizeZipPath(rootfile.attr("full-path"));
+                opfXml = textEntry(entries, opfPath);
+                if (opfXml != null && !opfXml.isBlank()) {
+                    String opfDir = parentDir(opfPath);
+                    String parsedTitle = firstTagText(opfXml, "dc:title", "title");
+                    if (parsedTitle != null && !parsedTitle.isBlank()) title = parsedTitle;
+                    author = firstTagText(opfXml, "dc:creator", "creator");
+                    manifest = parseManifest(opfXml, opfDir);
+                    spine = parseSpine(opfXml, manifest, entries);
+                }
+            }
+        }
 
         Book book = createBook(userId, title, author, "epub");
+        saveOriginalEpub(epubBytes, userId, book.getId());
         Map<String, String> assetMap = exportEpubAssets(entries, userId, book.getId());
         String cover = findEpubCover(opfXml, manifest, assetMap);
         if (cover != null) book.setCoverImagePath(cover);
@@ -171,7 +182,9 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             if (chapterTitle == null || chapterTitle.isBlank()) chapterTitle = "第" + (chapters.size() + 1) + "章";
             chapters.add(buildChapter(book.getId(), chapters.size(), cleanField(chapterTitle, 120, "章节"), html));
         }
-        if (chapters.isEmpty()) throw new RuntimeException("EPUB 未解析到有效章节");
+        if (chapters.isEmpty()) {
+            chapters.add(buildChapter(book.getId(), 0, cleanField(title, 120, "EPUB"), "这本 EPUB 将使用原文件阅读器打开。"));
+        }
         if ((book.getCoverImagePath() == null || book.getCoverImagePath().isBlank()) && !assetMap.isEmpty()) {
             book.setCoverImagePath(assetMap.values().iterator().next());
         }
@@ -306,10 +319,20 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
         return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength);
     }
 
-    private Map<String, byte[]> readEpubEntries(MultipartFile file) {
+    private void saveOriginalEpub(byte[] bytes, Integer userId, Integer bookId) {
+        try {
+            Path root = Paths.get(uploadPath).toAbsolutePath().resolve("epub").resolve(userId + "_" + bookId);
+            Files.createDirectories(root);
+            Files.write(root.resolve("book.epub"), bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("保存 EPUB 原文件失败: " + e.getMessage());
+        }
+    }
+
+    private Map<String, byte[]> readEpubEntries(byte[] bytes) {
         Map<String, byte[]> entries = new LinkedHashMap<>();
         long total = 0;
-        try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(bytes))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) continue;
@@ -715,6 +738,9 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements Bo
             } else {
                 vo.setReadProgress(0);
                 vo.setCurrentChapter(0);
+            }
+            if ("epub".equalsIgnoreCase(book.getSourceType())) {
+                vo.setEpubUrl("/uploads/epub/" + userId + "_" + book.getId() + "/book.epub");
             }
 
             // 标签

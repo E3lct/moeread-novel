@@ -11,7 +11,7 @@
         <span class="toc-toggle-icon">{{ tocCollapsed ? '>' : '<' }}</span>
       </button>
 
-      <div class="reader-topbar-title">{{ book.title }} - {{ currentChapter.title }}</div>
+      <div class="reader-topbar-title">{{ epubMeta.title || book.title }}<span v-if="!isEpubBook"> - {{ currentChapter.title }}</span></div>
 
       <button
         class="reader-mode-btn"
@@ -47,8 +47,27 @@
       </div>
 
       <!-- 正文 -->
-      <div class="reader-content-wrap" :class="{ 'paged-mode': pageMode === 'paged' }" ref="contentWrap">
+      <div class="reader-content-wrap" :class="{ 'paged-mode': pageMode === 'paged', 'epub-mode': isEpubBook }" ref="contentWrap">
         <div class="reader-content">
+          <div v-if="isEpubBook" class="epub-reader-shell">
+            <div class="epub-book-meta">
+              <div>
+                <div class="epub-kicker">EPUB</div>
+                <h1>{{ epubMeta.title || book.title || '未命名书籍' }}</h1>
+                <p>{{ epubMeta.creator || book.author || '未知作者' }}</p>
+              </div>
+              <span>{{ epubLocationLabel }}</span>
+            </div>
+            <div class="epub-frame" :class="{ loading: epubLoading }">
+              <div ref="epubViewer" class="epub-viewer"></div>
+              <button class="epub-hit epub-hit-left" @click="prevPage" aria-label="上一页"></button>
+              <button class="epub-hit epub-hit-right" @click="nextPage" aria-label="下一页"></button>
+              <div v-if="epubLoading" class="epub-loading">EPUB 加载中...</div>
+              <div v-if="epubError" class="epub-error">{{ epubError }}</div>
+            </div>
+          </div>
+
+          <template v-else>
           <div class="reader-state" v-if="loadingChapter">章节加载中...</div>
           <div class="reader-state error" v-else-if="chapterError">
             <div>{{ chapterError }}</div>
@@ -111,6 +130,7 @@
             >下一章</button>
           </div>
           <div class="reader-shortcut-hint">{{ pageMode === 'paged' ? '左右键翻页，点页面边缘也可以翻页' : '键盘左右键切换章节' }}</div>
+          </template>
         </div>
       </div>
     </div>
@@ -161,6 +181,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ePub from 'epubjs'
 import { getBookshelf } from '../api/book'
 import { getChapterList, getChapterContent } from '../api/chapter'
 import { getProgress, saveProgress } from '../api/progress'
@@ -179,11 +200,19 @@ const tocCollapsed = ref(false)
 const settingsOpen = ref(false)
 const contentWrap = ref(null)
 const tocScroll = ref(null)
+const epubViewer = ref(null)
 const loadingChapter = ref(false)
 const chapterError = ref('')
+const epubLoading = ref(false)
+const epubError = ref('')
+const epubMeta = ref({ title: '', creator: '' })
+const epubLocationLabel = ref('')
 const paragraphLimit = ref(520)
 const paragraphStep = 520
 let loadSeq = 0
+let epubBook = null
+let epubRendition = null
+let epubInitSeq = 0
 
 const fontSize = ref(readerStore.fontSize || 18)
 const lineHeight = ref(readerStore.lineHeight || 1.9)
@@ -205,6 +234,12 @@ const paragraphs = computed(() => {
 })
 
 const visibleParagraphs = computed(() => paragraphs.value.slice(0, paragraphLimit.value))
+const isEpubBook = computed(() => book.value?.sourceType === 'epub' && !!book.value?.epubUrl)
+const epubFileUrl = computed(() => {
+  const url = book.value?.epubUrl || ''
+  if (!url) return ''
+  return url.startsWith('http') ? url : '/api' + url
+})
 const isHtmlChapter = computed(() => /<\s*(p|div|section|article|img|h[1-6]|br)\b/i.test(currentChapter.value.content || ''))
 const readingBlocks = computed(() => buildReadingBlocks(currentChapter.value.content || '', isHtmlChapter.value))
 const pagedPages = computed(() => paginateBlocks(readingBlocks.value))
@@ -248,6 +283,87 @@ function goToChapter(index) {
   loadChapter(index)
 }
 
+function destroyEpubReader() {
+  if (epubRendition) {
+    try { epubRendition.destroy() } catch (e) {}
+    epubRendition = null
+  }
+  if (epubBook) {
+    try { epubBook.destroy() } catch (e) {}
+    epubBook = null
+  }
+}
+
+function applyEpubTheme() {
+  if (!epubRendition) return
+  const color = theme.value === 'night' ? '#C8BFA8' : '#3D2E1A'
+  epubRendition.themes.default({
+    body: {
+      color,
+      background: 'transparent',
+      'font-size': `${fontSize.value}px !important`,
+      'line-height': `${lineHeight.value} !important`,
+      'font-family': 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      margin: '0 !important',
+      padding: '0 !important'
+    },
+    p: {
+      'text-indent': '2em',
+      'margin-top': '0',
+      'margin-bottom': '1em'
+    },
+    img: {
+      'max-width': '100%',
+      'max-height': '92%',
+      'object-fit': 'contain'
+    },
+    html: { background: 'transparent' }
+  })
+  epubRendition.themes.select('default')
+}
+
+async function initEpubReader() {
+  if (!isEpubBook.value || !epubViewer.value || !epubFileUrl.value) return
+  const seq = ++epubInitSeq
+  epubLoading.value = true
+  epubError.value = ''
+  epubLocationLabel.value = ''
+  destroyEpubReader()
+  await nextTick()
+  if (!epubViewer.value || seq !== epubInitSeq) return
+  epubViewer.value.innerHTML = ''
+  try {
+    epubBook = ePub(epubFileUrl.value)
+    await epubBook.ready
+    if (seq !== epubInitSeq) return
+    const metadata = epubBook.package?.metadata || {}
+    epubMeta.value = {
+      title: metadata.title || book.value.title || '',
+      creator: metadata.creator || book.value.author || ''
+    }
+    epubRendition = epubBook.renderTo(epubViewer.value, {
+      width: '100%',
+      height: '100%',
+      flow: 'paginated',
+      spread: pageMode.value === 'paged' ? 'always' : 'none',
+      manager: 'default',
+      allowScriptedContent: false
+    })
+    applyEpubTheme()
+    epubRendition.on('relocated', (location) => {
+      const current = location?.start?.displayed
+      epubLocationLabel.value = current ? `${current.page} / ${current.total}` : ''
+      saveCurrentProgress()
+    })
+    await epubRendition.display()
+  } catch (e) {
+    console.error('EPUB 加载失败:', e)
+    epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
+  } finally {
+    if (seq === epubInitSeq) epubLoading.value = false
+  }
+}
+
 function triggerPageTurn(direction) {
   window.clearTimeout(pageTurnTimer)
   pageTurnClass.value = direction === 'next' ? 'turn-next' : 'turn-prev'
@@ -257,6 +373,11 @@ function triggerPageTurn(direction) {
 }
 
 async function nextPage() {
+  if (isEpubBook.value && epubRendition) {
+    triggerPageTurn('next')
+    await epubRendition.next()
+    return
+  }
   if (pageMode.value !== 'paged') {
     if (currentChapterIndex.value < chapters.value.length - 1) goToChapter(currentChapterIndex.value + 1)
     return
@@ -274,6 +395,11 @@ async function nextPage() {
 }
 
 async function prevPage() {
+  if (isEpubBook.value && epubRendition) {
+    triggerPageTurn('prev')
+    await epubRendition.prev()
+    return
+  }
   if (pageMode.value !== 'paged') {
     if (currentChapterIndex.value > 0) goToChapter(currentChapterIndex.value - 1)
     return
@@ -359,6 +485,16 @@ async function saveCurrentProgress() {
 }
 
 function handleKeydown(e) {
+  if (isEpubBook.value && (e.key === 'ArrowLeft' || e.key === 'PageUp')) {
+    e.preventDefault()
+    prevPage()
+    return
+  }
+  if (isEpubBook.value && (e.key === 'ArrowRight' || e.key === 'PageDown')) {
+    e.preventDefault()
+    nextPage()
+    return
+  }
   if (e.key === 'ArrowLeft') {
     if (pageMode.value === 'paged') {
       e.preventDefault()
@@ -384,17 +520,28 @@ function handleKeydown(e) {
   }
 }
 
-watch(fontSize, (v) => readerStore.setFontSize(v))
-watch(lineHeight, (v) => readerStore.setLineHeight(v))
-watch(theme, (v) => readerStore.setTheme(v))
+watch(fontSize, (v) => {
+  readerStore.setFontSize(v)
+  applyEpubTheme()
+})
+watch(lineHeight, (v) => {
+  readerStore.setLineHeight(v)
+  applyEpubTheme()
+})
+watch(theme, (v) => {
+  readerStore.setTheme(v)
+  applyEpubTheme()
+})
 watch(pageMode, async (v) => {
   localStorage.setItem('readerPageMode', v)
+  if (v === 'paged') tocCollapsed.value = true
   await nextTick()
   if (contentWrap.value) {
     contentWrap.value.scrollTop = 0
     contentWrap.value.scrollLeft = 0
   }
   pageIndex.value = 0
+  if (isEpubBook.value) await initEpubReader()
 })
 watch(pagedPages, () => {
   if (pageIndex.value >= pagedPages.value.length) {
@@ -415,6 +562,12 @@ onMounted(async () => {
     ])
     book.value = (bookRes.data || []).find(b => b.id === bookId) || { title: '未知' }
     chapters.value = chRes.data || []
+    if (isEpubBook.value) {
+      if (pageMode.value === 'paged') tocCollapsed.value = true
+      await nextTick()
+      await initEpubReader()
+      return
+    }
 
     // 恢复进度
     try {
@@ -438,6 +591,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.clearTimeout(pageTurnTimer)
+  destroyEpubReader()
   saveCurrentProgress()
 })
 </script>
@@ -569,7 +723,7 @@ onUnmounted(() => {
 }
 
 .reader-toc.collapsed {
-    width: 36px !important;
+    width: 0 !important;
     opacity: 0;
     border-right: 0;
     pointer-events: none;
@@ -897,6 +1051,128 @@ onUnmounted(() => {
     border-radius: 8px;
 }
 
+.reader-content-wrap.epub-mode {
+    overflow: hidden;
+}
+
+.reader-content-wrap.epub-mode .reader-content {
+    max-width: none;
+    width: 100%;
+    min-height: calc(100vh - 52px);
+    padding: clamp(14px, 2vw, 24px);
+}
+
+.epub-reader-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 82px);
+    gap: 12px;
+}
+
+.epub-book-meta {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 clamp(8px, 1vw, 16px);
+    color: var(--reader-text);
+}
+
+.epub-book-meta h1 {
+    margin: 0;
+    font-size: clamp(18px, 2vw, 28px);
+    line-height: 1.2;
+    font-weight: 650;
+}
+
+.epub-book-meta p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    opacity: 0.56;
+}
+
+.epub-book-meta > span {
+    flex-shrink: 0;
+    font-size: 12px;
+    opacity: 0.52;
+}
+
+.epub-kicker {
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--color-primary-darker);
+}
+
+.epub-frame {
+    position: relative;
+    flex: 1;
+    min-height: calc(100vh - 150px);
+    border-radius: 12px;
+    overflow: hidden;
+    background:
+        linear-gradient(90deg, rgba(93, 65, 34, 0.08), transparent 7%, transparent 93%, rgba(93, 65, 34, 0.08)),
+        rgba(255, 252, 245, 0.74);
+    border: 1px solid rgba(91, 68, 40, 0.12);
+    box-shadow: 0 24px 70px rgba(66, 48, 25, 0.16);
+}
+
+.reader-root.theme-night .epub-frame {
+    background: rgba(22, 20, 17, 0.82);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.epub-frame::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 24px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(0,0,0,0.10), rgba(255,255,255,0.24), rgba(0,0,0,0.08));
+    opacity: 0.36;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.epub-viewer {
+    position: absolute;
+    inset: clamp(18px, 2.2vw, 34px) clamp(20px, 3vw, 48px);
+}
+
+.epub-hit {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 18%;
+    z-index: 4;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.epub-hit-left { left: 0; }
+.epub-hit-right { right: 0; }
+
+.epub-loading,
+.epub-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    background: rgba(250, 248, 243, 0.82);
+    color: var(--reader-text);
+}
+
+.epub-error {
+    color: #B45309;
+}
+
 .reader-content-wrap.paged-mode {
     overflow: hidden;
 }
@@ -904,7 +1180,7 @@ onUnmounted(() => {
 .reader-content-wrap.paged-mode .reader-content {
     max-width: none;
     min-height: calc(100vh - 52px);
-    padding: 26px clamp(24px, 4vw, 56px) 34px;
+    padding: 18px clamp(18px, 2.4vw, 42px) 28px;
 }
 
 .reader-content-wrap.paged-mode .reader-chapter-title {
@@ -913,7 +1189,7 @@ onUnmounted(() => {
 
 .ebook-stage {
     position: relative;
-    max-width: 1180px;
+    max-width: 1480px;
     margin: 0 auto;
     perspective: 1800px;
 }
@@ -922,7 +1198,7 @@ onUnmounted(() => {
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    min-height: min(72vh, 760px);
+    min-height: calc(100vh - 148px);
     background: linear-gradient(90deg, rgba(72, 55, 35, 0.08), transparent 2.6%, transparent 97.4%, rgba(72, 55, 35, 0.08));
     border-radius: 10px;
     box-shadow: 0 22px 58px rgba(53, 43, 31, 0.18);
@@ -945,7 +1221,7 @@ onUnmounted(() => {
 
 .ebook-page {
     position: relative;
-    min-height: min(72vh, 760px);
+    min-height: calc(100vh - 148px);
     padding: 28px 34px 34px;
     overflow: hidden;
     background:
@@ -983,7 +1259,7 @@ onUnmounted(() => {
 }
 
 .ebook-page-body {
-    height: calc(min(72vh, 760px) - 92px);
+    height: calc(100vh - 240px);
     overflow: hidden;
     font-size: var(--reader-font-size);
     line-height: var(--reader-line-height);
@@ -1008,7 +1284,7 @@ onUnmounted(() => {
 .ebook-html-block :deep(img) {
     display: block;
     max-width: 100%;
-    max-height: calc(min(72vh, 760px) - 130px);
+    max-height: calc(100vh - 280px);
     width: auto;
     height: auto;
     margin: 1em auto;
