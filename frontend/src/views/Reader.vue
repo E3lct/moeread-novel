@@ -213,6 +213,8 @@ let epubInitSeq = 0
 let savedChapterIndex = 0
 let epubSavedCfi = ''
 let resizeObserver = null
+let epubUserNavSeq = 0
+let epubDisplaySeq = 0
 const epubBufferCache = new Map()
 
 const fontSize = ref(readerStore.fontSize || 18)
@@ -335,6 +337,7 @@ function applyEpubTheme() {
 async function initEpubReader() {
   if (!isEpubBook.value || !epubViewer.value || !epubFileUrl.value) return
   const seq = ++epubInitSeq
+  const navSeqAtStart = epubUserNavSeq
   epubLoading.value = true
   epubError.value = ''
   epubLocationLabel.value = ''
@@ -350,7 +353,7 @@ async function initEpubReader() {
     createEpubRendition()
     await displayEpubInitialTarget(undefined)
     if (seq !== epubInitSeq) return
-    await hydrateEpubMetadataAndToc(seq)
+    await hydrateEpubMetadataAndToc(seq, navSeqAtStart)
   } catch (e) {
     console.error('EPUB 加载失败:', e)
     epubError.value = e?.message || 'EPUB 加载失败，请重新导入文件'
@@ -382,7 +385,7 @@ async function loadEpubSource(url) {
   return buffer.slice(0)
 }
 
-async function hydrateEpubMetadataAndToc(seq) {
+async function hydrateEpubMetadataAndToc(seq, navSeqAtStart) {
   try {
     await withTimeout(epubBook.ready, 12000, 'EPUB 文件解析超时')
     if (seq !== epubInitSeq) return
@@ -399,7 +402,9 @@ async function hydrateEpubMetadataAndToc(seq) {
     }
     if (chapters.value.length) {
       const maxIndex = Math.max(chapters.value.length - 1, 0)
-      currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
+      if (epubUserNavSeq === navSeqAtStart) {
+        currentChapterIndex.value = Math.min(Math.max(savedChapterIndex, 0), maxIndex)
+      }
     }
   } catch (e) {
     console.warn('EPUB 元数据加载较慢，先保留正文阅读:', e)
@@ -429,6 +434,7 @@ function createEpubRendition() {
   bindEpubResize()
   applyEpubTheme()
   epubRendition.on('relocated', (location) => {
+    if (epubDisplaySeq > 0 && location?.start == null) return
     const current = location?.start?.displayed
     epubLocationLabel.value = current ? `${current.page} / ${current.total}` : ''
     epubSavedCfi = location?.start?.cfi || ''
@@ -469,6 +475,7 @@ async function displayWithFallback(target) {
 
 function waitForEpubDisplay(target, ms, message) {
   if (!epubRendition) return Promise.reject(new Error('EPUB 阅读器未初始化'))
+  const displaySeq = ++epubDisplaySeq
   let settled = false
   let timer = 0
   let offRendered = null
@@ -482,12 +489,14 @@ function waitForEpubDisplay(target, ms, message) {
   }
   return new Promise((resolve, reject) => {
     const done = () => {
+      if (displaySeq !== epubDisplaySeq) return
       if (settled) return
       settled = true
       cleanup()
       resolve()
     }
     const fail = (error) => {
+      if (displaySeq !== epubDisplaySeq) return
       if (settled) return
       settled = true
       cleanup()
@@ -567,9 +576,10 @@ function withTimeout(promise, ms, message) {
 
 async function goToEpubChapter(index) {
   if (!epubRendition || index < 0 || index >= chapters.value.length) return
+  epubUserNavSeq += 1
   currentChapterIndex.value = index
   pageIndex.value = 0
-  epubLoading.value = true
+  epubLoading.value = false
   epubError.value = ''
   try {
     const target = chapters.value[index].href || epubBook?.spine?.spineItems?.[index]?.href
