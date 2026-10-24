@@ -26,3 +26,12 @@ uploads/
 
 # ========== Config (keep secret) ==========
 application-prod.yml
+
+# Frontend and local secrets
+node_modules/
+frontend/dist/
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml

@@ -1,69 +1,75 @@
-# 墨读 Moeread
+# 墨读 MoeRead
 
-个人小说阅读器 - Spring Boot + Vue 正式版
+个人小说阅读器课程项目，开发过程中使用 AI 辅助。当前 `main` 为 Spring Boot + Vue 实现；仓库另保留 `legacy-jsp`（Servlet/JSP）。
+
+## 已有实现
+
+- 用户注册、登录及 JWT 请求鉴权；书架搜索、状态、喜欢和标签管理。
+- TXT、ZIP、EPUB 导入；章节目录、阅读主题及进度保存；阅读统计与热力图。
+- 自定义书源、订阅及规则解析。外部站点可用性和内容授权需另行确认；演示请使用自有或已获授权的文本。
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 后端框架 | Spring Boot 3.2 |
-| 数据库层 | MyBatis-Plus 3.5 |
-| 鉴权 | JWT (jjwt 0.12) |
-| 数据库 | MySQL 8 |
-| 前端 | Vue 3 + Vite + Pinia |
-| 部署 | 后端 Jar + 前端静态资源 / Docker + Nginx |
+| 部分 | 当前 main |
+| --- | --- |
+| 后端 | Java 17、Spring Boot 3.2.6、MyBatis-Plus 3.5.7、jjwt 0.12.5 |
+| 数据 | MySQL 8；8 个实体对应的表 |
+| 前端 | Vue 3、Vite 5、Pinia 2、Vue Router 4、Axios、epub.js |
+| 文本处理 | Jsoup、juniversalchardet、Java ZIP/XML 处理 |
 
-## 功能
+`legacy-jsp` 使用 Servlet 4、JSP/JSTL、JDBC、MySQL，打包为 WAR。
 
-- TXT 单文件、ZIP 批量导入
-- 开放书源管理：预设公共目录、自定义书源、公开 TXT 地址导入
-- 书架搜索、标签、喜欢、封面裁剪、状态管理
-- 阅读器目录、主题、字号、行距、进度保存
-- VS Code 摸鱼模式
-- 今日阅读、连续打卡、年度热力图、周阅读习惯
-- 头像、背景图、透明度、缩放和镜像设置
+## 本地启动（当前 main）
 
-## 项目结构
+需要 JDK 17、Maven、Node.js 18+ 和 MySQL 8。请创建专用本地数据库账号，勿使用生产凭据。
 
-```
-moeread-v2/
-├── pom.xml
-├── frontend/                    ← Vue 3 前端
-└── src/main/
-    ├── java/com/moeread/
-    │   ├── MoereadApplication.java    ← 启动类
-    │   ├── config/                     ← 配置（CORS、JWT、MyBatis）
-    │   ├── common/                     ← 公共（Result、异常处理）
-    │   ├── entity/                     ← 实体类（6张表）
-    │   ├── mapper/                     ← MyBatis-Plus Mapper
-    │   ├── service/                    ← 业务逻辑（接口）
-    │   │   └── impl/                   ← 业务逻辑（实现）
-    │   ├── controller/                 ← REST API 控制器
-    │   └── dto/                        ← 数据传输对象
-    └── resources/
-        ├── application.yml             ← 配置文件
-        └── schema-v2.sql               ← v2 新增表
+1. 在 MySQL 客户端执行以下脚本。脚本仅用于初始化本地空库；已有数据库请先备份并检查结构差异。
+
+```sql
+SOURCE /absolute/path/to/moeread-novel/src/main/resources/schema-base.sql;
+USE moeread;
+SOURCE /absolute/path/to/moeread-novel/src/main/resources/schema-v2.sql;
 ```
 
-## 运行
+2. 在同一终端设置环境变量后启动后端。以下为 PowerShell 示例（占位值需替换；Spring Boot 不会自动加载 `.env`）：
 
-```bash
-# 1. 确保 MySQL 8 运行中，导入基础数据库后执行 v2 新增表
-mysql -u root -p moeread < src/main/resources/schema-v2.sql
-
-# 2. 修改 application.yml 中的数据库密码
-
-# 3. 启动后端（需要 JDK 17+）
+```powershell
+$env:DB_USERNAME = 'your_local_user'
+$env:DB_PASSWORD = 'your_local_password'
+$env:JWT_SECRET = 'replace-with-a-random-secret-at-least-32-bytes'
 mvn spring-boot:run
+```
 
-# 4. 启动前端
+数据库默认地址为 `localhost:3306/moeread`，可用 `SPRING_DATASOURCE_URL` 覆盖。后端端口 `8081`，接口前缀 `/api`。
+
+3. 另开终端启动前端：
+
+```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-后端默认端口 `8081`，接口前缀 `/api`；前端默认端口 `5173`。
+打开 `http://localhost:5173`。Vite 将 `/api` 转发到后端。自行注册测试账号，无预置账号。使用自写 TXT 导入，检查书架、目录、进度和统计；书源联网功能单独验证。
 
-## 分支策略
+## 构建与使用说明
 
-正式版将作为 GitHub `main` 分支展示和发布；旧 JSP 作业版建议保留到 `legacy-jsp` 分支，避免每次查看或发行都需要切换到 `v2`。
+```powershell
+mvn test package
+cd frontend
+npm run build
+```
+
+仓库尚未提供自动化测试用例；运行后可按上述导入与阅读流程进行手动检查。密码仍采用历史兼容的 MD5 存储；上传目录公开映射，书源请求与资源访问仍需安全审查。仅建议隔离的本地学习演示。依赖审计存在告警，尚未完成升级及回归。
+
+历史中出现过数据库及 JWT 明文配置，删除当前文件内容不能撤销历史泄露；若这些值曾被实际使用，应更换。
+
+## 目录
+
+```text
+frontend/                         Vue 前端
+src/main/java/com/moeread/         controller、service、entity、mapper、config
+src/main/resources/application.yml
+src/main/resources/schema-base.sql
+src/main/resources/schema-v2.sql
+```
