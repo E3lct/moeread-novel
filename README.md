@@ -4,54 +4,54 @@
 
 ## 页面展示
 
-以下为实际部署页面的整页截图（2026-10-24），保留各页面的完整布局。阅读器及摸鱼模式使用本次编写的演示文本；书架中的书名与封面仅为界面展示，仓库不提供相应小说文件。
+以下为实际部署页面的无损 PNG 整页截图（2026-10-24），保留各页面的完整布局；点击图片可查看原图。阅读器及摸鱼模式使用本次编写的演示文本；书架中的书名与封面仅为界面展示，仓库不提供相应小说文件。
 
 ### 首页
 
 今日阅读、继续阅读与最近在读。
 
-![墨读首页整页截图](docs/images/home.jpg)
+![墨读首页整页截图](docs/images/home.png)
 
 ### 书架
 
 书籍搜索、状态分类和视图切换。
 
-![墨读书架整页截图](docs/images/bookshelf.jpg)
+![墨读书架整页截图](docs/images/bookshelf.png)
 
 ### 阅读器
 
 章节目录、正文阅读与章节切换。
 
-![墨读阅读器整页截图](docs/images/reader.jpg)
+![墨读阅读器整页截图](docs/images/reader.png)
 
 ### 摸鱼模式
 
 将同一演示正文呈现为编辑器界面。
 
-![墨读摸鱼模式整页截图](docs/images/muck.jpg)
+![墨读摸鱼模式整页截图](docs/images/muck.png)
 
 ### 本地导入
 
 TXT、ZIP、EPUB 文件导入入口。
 
-![墨读本地导入整页截图](docs/images/import.jpg)
+![墨读本地导入整页截图](docs/images/import.png)
 
 ### 阅读统计
 
 累计时长、年度热力图与阅读习惯。
 
-![墨读阅读统计整页截图](docs/images/stats.jpg)
+![墨读阅读统计整页截图](docs/images/stats.png)
 
 ### 设置
 
 个人资料、个性化、阅读目标及导入历史。
 
-![墨读设置整页截图](docs/images/settings.jpg)
+![墨读设置整页截图](docs/images/settings.png)
 
 <details>
 <summary>登录界面</summary>
 
-![墨读登录界面](docs/images/login.jpg)
+![墨读登录界面](docs/images/login.png)
 
 </details>
 
